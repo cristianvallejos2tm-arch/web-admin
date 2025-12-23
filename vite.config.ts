@@ -8,6 +8,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8080,
       host: '0.0.0.0',
+    }, preview: {
+      allowedHosts: ['web-admin-duo2.onrender.com'],
     },
     plugins: [react()],
     define: {
