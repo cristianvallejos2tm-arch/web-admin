@@ -15,6 +15,7 @@ import Tires from './components/Tires';
 import Inventory from './components/Inventory';
 import Panol from './components/Panol';
 import Capacitaciones from './components/Capacitaciones';
+import CapacitacionExam from './components/CapacitacionExam';
 import PerformanceEval from './components/PerformanceEval';
 import Profile from './components/Profile';
 import ChangePassword from './components/ChangePassword';
@@ -33,6 +34,10 @@ interface UserData {
 const App: React.FC = () => {
   const STORAGE_KEY = 'cam-session';
   const TAB_KEY = 'cam-last-tab';
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  if (path.startsWith('/capacitaciones/') && path.split('/').length >= 3) {
+    return <CapacitacionExam />;
+  }
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);

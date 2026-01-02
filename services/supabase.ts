@@ -534,6 +534,17 @@ export async function upsertCapacitacionPreguntas(
     );
 }
 
+export async function submitCapacitacionRespuestas(
+    responses: Array<{ pregunta_id: string; usuario_id: string; respuesta: string }>,
+) {
+    if (responses.length === 0) {
+        return { data: [], error: null };
+    }
+    return supabase
+        .from('capacitaciones_respuestas')
+        .upsert(responses, { onConflict: 'pregunta_id,usuario_id', ignoreDuplicates: false });
+}
+
 export async function insertCapacitacionInscripciones(capacitacionId: string, usuarioIds: string[]) {
     if (usuarioIds.length === 0) {
         return { data: [], error: null };

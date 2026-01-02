@@ -89,6 +89,21 @@ CREATE TABLE public.usuarios_operadoras (
 ALTER TABLE public.usuarios
   ADD COLUMN IF NOT EXISTS base_id uuid REFERENCES public.bases(id);
 
+CREATE TABLE IF NOT EXISTS public.capacitaciones_respuestas (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  pregunta_id uuid NOT NULL,
+  usuario_id uuid NOT NULL,
+  respuesta text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT capacitaciones_respuestas_pkey PRIMARY KEY (id),
+  CONSTRAINT capacitaciones_respuestas_pregunta_id_fkey FOREIGN KEY (pregunta_id) REFERENCES public.capacitaciones_preguntas(id) ON DELETE CASCADE,
+  CONSTRAINT capacitaciones_respuestas_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS capacitaciones_respuestas_unique
+ON public.capacitaciones_respuestas (pregunta_id, usuario_id);
+
 -- Ensure the capacitaciones module exists for granting access via the UI
 INSERT INTO public.modulos (code, nombre, descripcion, activo)
 VALUES ('capacitaciones', 'Capacitaciones', 'Gestión de capacitaciones y planillas de preguntas', true)

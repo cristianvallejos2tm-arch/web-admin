@@ -21,6 +21,7 @@ import {
   updateCapacitacion,
   upsertCapacitacionPreguntas,
   fetchUsuariosLite,
+  supabase,
 } from '../services/supabase';
 
 interface QuestionRow {
@@ -190,6 +191,7 @@ const Capacitaciones: React.FC = () => {
     }
 
     const contextText = [intro, description].filter(Boolean).join(' ');
+    const portalUrl = `${window.location.origin}/capacitaciones/${capacitacionId}`;
     const invitationEntries = assignedUsers
       .filter((user) => user.email)
       .map((user) => ({
@@ -199,7 +201,7 @@ const Capacitaciones: React.FC = () => {
           <p>Hola ${user.nombre ?? 'colaborador'},</p>
           <p>Se ha creado la capacitación <strong>${title}</strong>.</p>
           ${contextText ? `<p>${contextText}</p>` : ''}
-          <p>Ingresá al panel para revisar el contenido y completar la planilla de preguntas.</p>
+          <p>Ingresá al portal para revisar la capacitación y realizar el examen oficial: <a href="${portalUrl}">${portalUrl}</a></p>
           <p>Saludos,<br/>Equipo CAM</p>
         `.trim(),
       }));
@@ -209,6 +211,14 @@ const Capacitaciones: React.FC = () => {
     const { error: notificationError } = await queueCapacitacionNotifications(invitationEntries);
     if (notificationError) {
       console.error('Error enviando notificaciones de capacitacion', notificationError);
+    }
+  };
+
+  const triggerEmailDispatch = async () => {
+    try {
+      await supabase.functions.invoke('processEmailQueue');
+    } catch (dispatchError) {
+      console.error('No se pudo procesar la cola de mails', dispatchError);
     }
   };
 
@@ -337,6 +347,7 @@ const Capacitaciones: React.FC = () => {
         );
         if (!editingSession) {
           await assignAndNotifyUsuarios(capacitacionId);
+          await triggerEmailDispatch();
         }
       }
       resetFormFields();
