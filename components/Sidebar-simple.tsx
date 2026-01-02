@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Truck, ClipboardList, Settings, LogOut, Activity, Users, ShoppingCart, User, ChevronDown, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Truck, ClipboardList, Settings, LogOut, Activity, Users, ShoppingCart, User, ChevronDown, ShieldCheck, BookOpenCheck } from 'lucide-react';
 
 interface SidebarProps {
     activeTab: string;
@@ -28,6 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         'proveedores': 'proveedores',
         'compras': 'compras',
         'autorizaciones': 'autorizaciones',
+        'capacitaciones': 'capacitaciones',
         'analytics': 'analytics',
         'profile': 'profile',
         'config': 'configuration',
@@ -46,6 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         { id: 'inventory', label: 'Inventario', icon: ClipboardList, moduleCode: 'inventory' },
         { id: 'users', label: 'Usuarios', icon: Users, moduleCode: 'users' },
         { id: 'panol', label: 'Pañol', icon: ClipboardList, moduleCode: 'panol' },
+        { id: 'capacitaciones', label: 'Capacitaciones', icon: BookOpenCheck, moduleCode: 'capacitaciones' },
         { id: 'eval', label: 'Eval. de Desempeño', icon: ClipboardList, moduleCode: 'performance' },
         { id: 'proveedores', label: 'Proveedores', icon: Users, moduleCode: 'proveedores' },
         { id: 'compras', label: 'Compras', icon: ShoppingCart, moduleCode: 'compras' },

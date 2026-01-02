@@ -14,6 +14,7 @@ import Lubricants from './components/Lubricants';
 import Tires from './components/Tires';
 import Inventory from './components/Inventory';
 import Panol from './components/Panol';
+import Capacitaciones from './components/Capacitaciones';
 import PerformanceEval from './components/PerformanceEval';
 import Profile from './components/Profile';
 import ChangePassword from './components/ChangePassword';
@@ -230,6 +231,7 @@ const App: React.FC = () => {
           {activeTab === 'cubiertas' && <Tires />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'panol' && <Panol />}
+          {activeTab === 'capacitaciones' && <Capacitaciones />}
           {activeTab === 'eval' && <PerformanceEval />}
           {activeTab === 'profile' && <Profile />}
           {activeTab === 'change-password' && <ChangePassword />}
