@@ -88,3 +88,11 @@ CREATE TABLE public.usuarios_operadoras (
 
 ALTER TABLE public.usuarios
   ADD COLUMN IF NOT EXISTS base_id uuid REFERENCES public.bases(id);
+
+-- Ensure the capacitaciones module exists for granting access via the UI
+INSERT INTO public.modulos (code, nombre, descripcion, activo)
+VALUES ('capacitaciones', 'Capacitaciones', 'Gestión de capacitaciones y planillas de preguntas', true)
+ON CONFLICT (code) DO UPDATE
+SET nombre = EXCLUDED.nombre,
+    descripcion = EXCLUDED.descripcion,
+    activo = EXCLUDED.activo;

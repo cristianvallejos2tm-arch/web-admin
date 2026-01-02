@@ -16,8 +16,11 @@ import {
   fetchCapacitacionParticipants,
   fetchCapacitacionPreguntas,
   fetchCapacitaciones,
+  insertCapacitacionInscripciones,
+  queueCapacitacionNotifications,
   updateCapacitacion,
   upsertCapacitacionPreguntas,
+  fetchUsuariosLite,
 } from '../services/supabase';
 
 interface QuestionRow {
@@ -61,6 +64,12 @@ interface ParticipantRecord {
   };
 }
 
+interface UsuarioAsignado {
+  id: string;
+  nombre: string;
+  email: string;
+}
+
 const emptyQuestion = (): QuestionRow => ({
   id: `${Date.now()}-${Math.random()}`,
   question: '',
@@ -91,6 +100,8 @@ const Capacitaciones: React.FC = () => {
   const [attachments, setAttachments] = useState<AttachmentInput[]>(emptyAttachments());
   const [questionnaireName, setQuestionnaireName] = useState('');
   const [questions, setQuestions] = useState<QuestionRow[]>([emptyQuestion()]);
+  const [usuariosCatalogo, setUsuariosCatalogo] = useState<UsuarioAsignado[]>([]);
+  const [selectedUsuarioIds, setSelectedUsuarioIds] = useState<string[]>([]);
 
   const [editingSession, setEditingSession] = useState<CapacitacionSummary | null>(null);
   const [detailSession, setDetailSession] = useState<CapacitacionSummary | null>(null);
@@ -110,7 +121,17 @@ const Capacitaciones: React.FC = () => {
 
   useEffect(() => {
     loadCapacitaciones();
+    loadUsuariosCatalogo();
   }, []);
+
+  const loadUsuariosCatalogo = async () => {
+    const { data, error } = await fetchUsuariosLite();
+    if (error) {
+      console.error('Error cargando usuarios para capacitaciones', error);
+      return;
+    }
+    setUsuariosCatalogo(data ?? []);
+  };
 
   const totalParticipants = useMemo(
     () => trainings.reduce((acc, session) => acc + (session.inscriptos ?? 0), 0),
@@ -136,6 +157,9 @@ const Capacitaciones: React.FC = () => {
     [openSessions, totalParticipants, trainings.length],
   );
 
+  const allUsuariosSelected =
+    usuariosCatalogo.length > 0 && selectedUsuarioIds.length === usuariosCatalogo.length;
+
   const canSave = useMemo(() => {
     return title.trim().length > 0 && questions.every((q) => q.question.trim() && q.answer.trim());
   }, [title, questions]);
@@ -149,6 +173,57 @@ const Capacitaciones: React.FC = () => {
     setAttachments(emptyAttachments());
     setQuestionnaireName('');
     setQuestions([emptyQuestion()]);
+    setSelectedUsuarioIds([]);
+  };
+
+  const assignAndNotifyUsuarios = async (capacitacionId: string) => {
+    if (selectedUsuarioIds.length === 0) return;
+    const assignedUsers = usuariosCatalogo.filter((user) => selectedUsuarioIds.includes(user.id));
+    if (assignedUsers.length === 0) return;
+
+    const { error: inscripcionesError } = await insertCapacitacionInscripciones(
+      capacitacionId,
+      assignedUsers.map((user) => user.id),
+    );
+    if (inscripcionesError) {
+      console.error('Error registrando inscripciones de capacitacion', inscripcionesError);
+    }
+
+    const contextText = [intro, description].filter(Boolean).join(' ');
+    const invitationEntries = assignedUsers
+      .filter((user) => user.email)
+      .map((user) => ({
+        to_email: user.email,
+        subject: `Nueva capacitación: ${title}`,
+        body: `
+          <p>Hola ${user.nombre ?? 'colaborador'},</p>
+          <p>Se ha creado la capacitación <strong>${title}</strong>.</p>
+          ${contextText ? `<p>${contextText}</p>` : ''}
+          <p>Ingresá al panel para revisar el contenido y completar la planilla de preguntas.</p>
+          <p>Saludos,<br/>Equipo CAM</p>
+        `.trim(),
+      }));
+
+    if (invitationEntries.length === 0) return;
+
+    const { error: notificationError } = await queueCapacitacionNotifications(invitationEntries);
+    if (notificationError) {
+      console.error('Error enviando notificaciones de capacitacion', notificationError);
+    }
+  };
+
+  const toggleUsuarioAsignado = (usuarioId: string) => {
+    setSelectedUsuarioIds((current) =>
+      current.includes(usuarioId) ? current.filter((id) => id !== usuarioId) : [...current, usuarioId],
+    );
+  };
+
+  const handleSelectAllUsuarios = () => {
+    if (selectedUsuarioIds.length === usuariosCatalogo.length) {
+      setSelectedUsuarioIds([]);
+      return;
+    }
+    setSelectedUsuarioIds(usuariosCatalogo.map((user) => user.id));
   };
 
   const startNew = () => {
@@ -260,6 +335,9 @@ const Capacitaciones: React.FC = () => {
           capacitacionId,
           questions.map((question) => ({ question: question.question, answer: question.answer })),
         );
+        if (!editingSession) {
+          await assignAndNotifyUsuarios(capacitacionId);
+        }
       }
       resetFormFields();
       setEditingSession(null);
@@ -475,6 +553,52 @@ const Capacitaciones: React.FC = () => {
                     placeholder="Detalle el temario, duración, requisitos y destinatarios"
                   />
                 </label>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-stone-900">Usuarios asignados</h2>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllUsuarios}
+                    className="text-xs font-semibold text-amber-500 hover:text-amber-600 transition"
+                  >
+                    {allUsuariosSelected ? 'Limpiar selección' : 'Seleccionar todos'}
+                  </button>
+                </div>
+                <p className="text-sm text-stone-500">
+                  Seleccioná quién debe recibir la notificación por correo cuando guardes la capacitación.
+                </p>
+                <div className="max-h-56 overflow-y-auto rounded-2xl border border-stone-200 p-3">
+                  {usuariosCatalogo.length === 0 ? (
+                    <p className="text-xs text-stone-400">No hay usuarios registrados.</p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {usuariosCatalogo.map((usuario) => {
+                        const isChecked = selectedUsuarioIds.includes(usuario.id);
+                        return (
+                          <label
+                            key={usuario.id}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-stone-100 px-3 py-2 text-sm text-stone-600 transition hover:border-amber-200"
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleUsuarioAsignado(usuario.id)}
+                                className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                              />
+                              <div>
+                                <p className="text-sm font-semibold text-stone-900">{usuario.nombre}</p>
+                                <p className="text-xs text-stone-500">{usuario.email}</p>
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </section>
 
               <section className="space-y-4">

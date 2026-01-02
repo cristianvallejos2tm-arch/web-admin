@@ -533,3 +533,28 @@ export async function upsertCapacitacionPreguntas(
         })),
     );
 }
+
+export async function insertCapacitacionInscripciones(capacitacionId: string, usuarioIds: string[]) {
+    if (usuarioIds.length === 0) {
+        return { data: [], error: null };
+    }
+    return supabase
+        .from('capacitaciones_inscripciones')
+        .insert(
+            usuarioIds.map((usuarioId) => ({
+                capacitacion_id: capacitacionId,
+                usuario_id: usuarioId,
+            })),
+        );
+}
+
+export async function queueCapacitacionNotifications(
+    entries: Array<{ to_email: string; subject: string; body: string }>,
+) {
+    if (entries.length === 0) {
+        return { data: [], error: null };
+    }
+    return supabase
+        .from('email_outbox')
+        .insert(entries.map((entry) => ({ ...entry, status: 'PENDING' })));
+}
