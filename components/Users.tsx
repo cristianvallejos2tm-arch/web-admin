@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Plus, Edit2, Trash2, Search, Shield, UserCheck, Eye } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { Users as UsersIcon, Plus, Edit2, Trash2, Search, Shield, UserCheck, Eye, Grid } from 'lucide-react';
+import {
+    supabase,
+    fetchBases,
+    fetchOperadoras,
+    syncUserOperadoras,
+    createOperadora
+} from '../services/supabase';
 
 interface Usuario {
     id: string;
@@ -13,6 +19,8 @@ interface Usuario {
     profile_can_authorize?: boolean;
     profile_level?: number | null;
     profile_active?: boolean;
+    base_id?: string;
+    operadoras?: string[];
 }
 
 interface Modulo {
@@ -23,9 +31,20 @@ interface Modulo {
     activo: boolean;
 }
 
+interface Base {
+    id: string;
+    nombre: string;
+}
+
+interface Operadora {
+    id: string;
+    nombre: string;
+}
 interface UsersProps {
     userRole?: string;
 }
+
+type UserGroupId = 'todos' | 'administradores' | 'colaboradores' | 'aprobadores';
 
 const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
     const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -34,6 +53,11 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState<Usuario | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState<UserGroupId>('todos');
+    const [bases, setBases] = useState<Base[]>([]);
+    const [operadoras, setOperadoras] = useState<Operadora[]>([]);
+    const [openModulesUser, setOpenModulesUser] = useState<string | null>(null);
+    const [newOperadoraName, setNewOperadoraName] = useState('');
 
     const [formData, setFormData] = useState({
         email: '',
@@ -43,15 +67,44 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
         modules: [] as string[],
         profile_can_authorize: false,
         profile_level: 1,
-        profile_active: true
+        profile_active: true,
+        base_id: '',
+        operadoras: [] as string[]
     });
+
+    const userGroups: { id: UserGroupId; label: string; description: string; filter: (usuario: Usuario) => boolean }[] = [
+        {
+            id: 'todos',
+            label: 'Todos',
+            description: 'Vista completa de usuarios activos',
+            filter: () => true,
+        },
+        {
+            id: 'administradores',
+            label: 'Administradores',
+            description: 'Usuarios con rol admin',
+            filter: (usuario) => usuario.rol === 'admin',
+        },
+        {
+            id: 'colaboradores',
+            label: 'Colaboradores',
+            description: 'Editores y lectura que trabajan día a día',
+            filter: (usuario) => usuario.rol === 'editor' || usuario.rol === 'solo_lectura',
+        },
+        {
+            id: 'aprobadores',
+            label: 'Aprobadores',
+            description: 'Usuarios autorizados para aprobar solicitudes',
+            filter: (usuario) => usuario.profile_can_authorize,
+        },
+    ];
 
     useEffect(() => {
         fetchData();
     }, []);
 
     const fetchData = async () => {
-        await Promise.all([fetchUsuarios(), fetchModulos()]);
+        await Promise.all([fetchUsuarios(), fetchModulos(), loadBases(), loadOperadoras()]);
     };
 
     const fetchModulos = async () => {
@@ -66,6 +119,39 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
             setModulos(data || []);
         } catch (error) {
             console.error('Error fetching modulos:', error);
+        }
+    };
+
+    const loadBases = async () => {
+        const { data, error } = await fetchBases();
+        if (error) {
+            console.error('Error fetching bases:', error);
+            return;
+        }
+        setBases(data || []);
+    };
+
+    const loadOperadoras = async () => {
+        const { data, error } = await fetchOperadoras();
+        if (error) {
+            console.error('Error fetching operadoras:', error);
+            return;
+        }
+        setOperadoras(data || []);
+    };
+
+    const handleAddOperadora = async () => {
+        const trimmed = newOperadoraName.trim();
+        if (!trimmed) return;
+        try {
+            const { data, error } = await createOperadora(trimmed);
+            if (error) throw error;
+            if (data) {
+                setOperadoras((prev) => [...prev, data]);
+                setNewOperadoraName('');
+            }
+        } catch (err: any) {
+            alert('No se pudo crear la operadora: ' + err.message);
         }
     };
 
@@ -106,11 +192,31 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
                 });
             }
 
+            let operadoraMap: Record<string, string[]> = {};
+            if (ids.length > 0) {
+                const { data: userOperadoras, error: userOperadorasError } = await supabase
+                    .from('usuarios_operadoras')
+                    .select('usuario_id, operadora_id')
+                    .in('usuario_id', ids);
+                if (userOperadorasError) {
+                    console.warn('No se pudieron cargar las operadoras (tabla ausente?):', userOperadorasError);
+                } else {
+                    (userOperadoras || []).forEach((row: any) => {
+                        if (!operadoraMap[row.usuario_id]) {
+                            operadoraMap[row.usuario_id] = [];
+                        }
+                        operadoraMap[row.usuario_id].push(row.operadora_id);
+                    });
+                }
+            }
+
             const merged = usuariosWithModules.map((u: any) => ({
                 ...u,
                 profile_can_authorize: profilesById[u.id]?.can_authorize ?? false,
                 profile_level: profilesById[u.id]?.authorization_level ?? null,
                 profile_active: profilesById[u.id]?.active ?? false,
+                base_id: u.base_id,
+                operadoras: operadoraMap[u.id] || [],
             }));
 
             setUsuarios(merged);
@@ -131,6 +237,7 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
                     email: formData.email,
                     nombre: formData.nombre,
                     rol: formData.rol,
+                    base_id: formData.base_id || null,
                     updated_at: new Date().toISOString().replace('T', ' ').replace('Z', '')
                 };
 
@@ -148,6 +255,7 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
 
                 // Actualizar módulos del usuario
                 await syncUserModules(editingUser.id, formData.modules);
+                await syncUserOperadoras(editingUser.id, formData.operadoras);
 
                 await upsertProfile(editingUser.id);
 
@@ -169,6 +277,13 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
                 if (!parsedAuthUser?.id) throw new Error('No se pudo crear el usuario en Auth');
 
                 // Insertar modulos del usuario
+                await supabase
+                    .from('usuarios')
+                    .update({ base_id: formData.base_id || null })
+                    .eq('id', parsedAuthUser.id);
+
+                await syncUserOperadoras(parsedAuthUser.id, formData.operadoras);
+
                 if (formData.modules.length > 0) {
                     await syncUserModules(parsedAuthUser.id, formData.modules);
                 }
@@ -186,7 +301,9 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
                 modules: [],
                 profile_can_authorize: false,
                 profile_level: 1,
-                profile_active: true
+                profile_active: true,
+                base_id: '',
+                operadoras: []
             });
             fetchUsuarios();
         } catch (error: any) {
@@ -241,6 +358,9 @@ const Users: React.FC<UsersProps> = ({ userRole = 'admin' }) => {
             profile_can_authorize: usuario.profile_can_authorize ?? false,
             profile_level: usuario.profile_level ?? 1,
             profile_active: usuario.profile_active ?? true
+            ,
+            base_id: usuario.base_id ?? '',
+            operadoras: usuario.operadoras ?? []
         });
         setShowModal(true);
     };
@@ -277,14 +397,22 @@ const getRoleBadge = (rol: string) => {
         );
     };
 
-    const filteredUsuarios = usuarios.filter(u =>
+    const activeGroup = userGroups.find((group) => group.id === selectedGroup) ?? userGroups[0];
+    const groupFilteredUsuarios = usuarios.filter(activeGroup.filter);
+    const filteredUsuarios = groupFilteredUsuarios.filter(u =>
         u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const groupCounts = userGroups.map((group) => ({
+        id: group.id,
+        count: usuarios.filter(group.filter).length,
+    }));
+
     const canCreate = userRole === 'admin';
     const canEdit = userRole === 'admin';
     const canDelete = userRole === 'admin';
+    const columnCount = 7 + (canEdit || canDelete ? 1 : 0);
 
     if (loading) {
         return (
@@ -318,7 +446,9 @@ const getRoleBadge = (rol: string) => {
                                 modules: [],
                                 profile_can_authorize: false,
                                 profile_level: 1,
-                                profile_active: true
+                                profile_active: true,
+                                base_id: '',
+                                operadoras: []
                             });
                             setShowModal(true);
                         }}
@@ -330,9 +460,34 @@ const getRoleBadge = (rol: string) => {
                 )}
             </div>
 
-            {/* Search */}
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        {/* Group filter */}
+        <div className="grid gap-3 md:grid-cols-4">
+            {userGroups.map((group) => {
+                const isActive = selectedGroup === group.id;
+                const countInfo = groupCounts.find((entry) => entry.id === group.id);
+                return (
+                    <button
+                        key={group.id}
+                        onClick={() => setSelectedGroup(group.id)}
+                        className={`text-left rounded-2xl border p-4 transition ${
+                            isActive
+                                ? 'border-amber-500 bg-amber-50 shadow-sm'
+                                : 'border-slate-100 bg-white hover:border-slate-200'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-stone-900">{group.label}</span>
+                            <span className="text-xs text-slate-500">{countInfo?.count ?? 0}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">{group.description}</p>
+                    </button>
+                );
+            })}
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                     type="text"
                     placeholder="Buscar por nombre o email..."
@@ -351,21 +506,23 @@ const getRoleBadge = (rol: string) => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Usuario</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Rol</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Módulos</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha Creación</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Módulos</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Base</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Operadoras</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha Creación</th>
                                 {(canEdit || canDelete) && (
                                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Acciones</th>
                                 )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredUsuarios.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                                        No se encontraron usuarios
-                                    </td>
-                                </tr>
-                            ) : (
+                                {filteredUsuarios.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={columnCount} className="px-6 py-8 text-center text-slate-500">
+                                            No se encontraron usuarios
+                                        </td>
+                                    </tr>
+                                ) : (
                                 filteredUsuarios.map((usuario) => (
                                     <tr key={usuario.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -384,19 +541,62 @@ const getRoleBadge = (rol: string) => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {getRoleBadge(usuario.rol)}
                                         </td>
+                                        <td className="px-6 py-4 relative">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setOpenModulesUser((current) =>
+                                                        current === usuario.id ? null : usuario.id,
+                                                    )
+                                                }
+                                                className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full border border-stone-200 bg-white text-stone-700 hover:border-amber-300 transition"
+                                            >
+                                                <Grid size={14} />
+                                                Ver módulos
+                                            </button>
+                                            {openModulesUser === usuario.id && (
+                                                <div className="absolute z-20 mt-2 w-56 rounded-2xl border border-stone-200 bg-white p-3 shadow-lg">
+                                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                                                        Módulos asignados
+                                                    </p>
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        {usuario.modules && usuario.modules.length > 0 ? (
+                                                            usuario.modules.map((moduleId) => {
+                                                                const modulo = modulos.find((m) => m.id === moduleId);
+                                                                return modulo ? (
+                                                                    <span
+                                                                        key={moduleId}
+                                                                        className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded"
+                                                                    >
+                                                                        {modulo.nombre}
+                                                                    </span>
+                                                                ) : null;
+                                                            })
+                                                        ) : (
+                                                            <span className="text-xs text-slate-400">Sin módulos</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <p className="text-slate-600">
+                                                {bases.find((base) => base.id === usuario.base_id)?.nombre || 'Sin base'}
+                                            </p>
+                                        </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-wrap gap-1">
-                                                {usuario.modules && usuario.modules.length > 0 ? (
-                                                    usuario.modules.map(moduleId => {
-                                                        const modulo = modulos.find(m => m.id === moduleId);
-                                                        return modulo ? (
-                                                            <span key={moduleId} className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
-                                                                {modulo.nombre}
+                                                {usuario.operadoras && usuario.operadoras.length > 0 ? (
+                                                    usuario.operadoras.map((operadoraId) => {
+                                                        const operadora = operadoras.find((op) => op.id === operadoraId);
+                                                        return operadora ? (
+                                                            <span key={operadoraId} className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
+                                                                {operadora.nombre}
                                                             </span>
                                                         ) : null;
                                                     })
                                                 ) : (
-                                                    <span className="text-slate-400 text-xs">Sin módulos</span>
+                                                    <span className="text-slate-400 text-xs">Sin operadoras</span>
                                                 )}
                                             </div>
                                         </td>
@@ -438,63 +638,69 @@ const getRoleBadge = (rol: string) => {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-bold text-slate-900 mb-4">
                             {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
                         </h2>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.nombre}
-                                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                />
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Nombre</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.nombre}
+                                            onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                                        <input
+                                            type="email"
+                                            required
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                            Contraseña {editingUser && '(dejar en blanco para no cambiar)'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            required={!editingUser}
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Rol</label>
+                                        <select
+                                            value={formData.rol}
+                                            onChange={(e) => setFormData({ ...formData, rol: e.target.value as any })}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        >
+                                            <option value="admin">Admin (acceso completo)</option>
+                                            <option value="editor">Editor (ver y editar)</option>
+                                            <option value="solo_lectura">Solo Lectura (solo ver)</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Contraseña {editingUser && '(dejar en blanco para no cambiar)'}
-                                </label>
-                                <input
-                                    type="password"
-                                    required={!editingUser}
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Rol</label>
-                                <select
-                                    value={formData.rol}
-                                    onChange={(e) => setFormData({ ...formData, rol: e.target.value as any })}
-                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                >
-                                    <option value="admin">Admin (acceso completo)</option>
-                                    <option value="editor">Editor (ver y editar)</option>
-                                    <option value="solo_lectura">Solo Lectura (solo ver)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Módulos habilitados</label>
-                                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                            <div className="border border-slate-200 rounded-2xl p-4 space-y-3">
+                                <p className="text-sm font-semibold text-slate-700">Modulos habilitados</p>
+                                <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2 border border-slate-100 rounded-xl">
                                     {modulos.map((modulo) => (
                                         <label key={modulo.id} className="inline-flex items-center gap-2 text-sm">
                                             <input
@@ -514,11 +720,75 @@ const getRoleBadge = (rol: string) => {
                                     ))}
                                 </div>
                                 {modulos.length === 0 && (
-                                    <p className="text-sm text-slate-500 mt-2">No hay módulos disponibles. Crea módulos primero.</p>
+                                    <p className="text-sm text-slate-500">No hay modulos disponibles. Crea modulos primero.</p>
                                 )}
                             </div>
 
-                            <div className="border border-slate-200 rounded-lg p-4 space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <label className="space-y-2 text-sm text-slate-600">
+                                    <span className="text-sm font-semibold text-slate-700 block">Base asignada</span>
+                                    <select
+                                        value={formData.base_id}
+                                        onChange={(e) => setFormData({ ...formData, base_id: e.target.value })}
+                                        className="w-full rounded-2xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 bg-white"
+                                    >
+                                        <option value="">Sin base</option>
+                                        {bases.map((base) => (
+                                            <option key={base.id} value={base.id}>
+                                                {base.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <div className="space-y-2 text-sm text-slate-600">
+                                    <p className="text-sm font-semibold text-slate-700">Operadoras</p>
+                                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-xl">
+                                        {operadoras.length === 0 && (
+                                            <div className="text-xs text-slate-400">
+                                                No hay operadoras cargadas. Agrega una nueva abajo.
+                                            </div>
+                                        )}
+                                        {operadoras.map((operadora) => {
+                                            const has = formData.operadoras.includes(operadora.id);
+                                            return (
+                                                <label key={operadora.id} className="inline-flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={has}
+                                                        onChange={() => {
+                                                            const next = has
+                                                                ? formData.operadoras.filter((x) => x !== operadora.id)
+                                                                : [...formData.operadoras, operadora.id];
+                                                            setFormData({ ...formData, operadoras: next });
+                                                        }}
+                                                        className="h-4 w-4 text-amber-600 border-slate-200 rounded"
+                                                    />
+                                                    <span className="text-slate-700">{operadora.nombre}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newOperadoraName}
+                                            onChange={(e) => setNewOperadoraName(e.target.value)}
+                                            placeholder="Agregar operadora"
+                                            className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddOperadora}
+                                            className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition"
+                                        >
+                                            Agregar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border border-slate-200 rounded-2xl p-4 space-y-4">
                                 <h3 className="text-sm font-semibold text-slate-700">Perfil de autorizacion</h3>
                                 <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                     <input

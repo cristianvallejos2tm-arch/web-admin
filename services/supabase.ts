@@ -38,6 +38,38 @@ export async function fetchUsuariosLite() {
     return supabase.from('usuarios').select('id,nombre,email').order('nombre');
 }
 
+export async function fetchOperadoras() {
+    return supabase.from('operadoras').select('*').order('nombre');
+}
+
+export async function createOperadora(nombre: string) {
+    return supabase.from('operadoras').insert([{ nombre }]).select('*').single();
+}
+
+export async function syncUserOperadoras(userId: string, operadoraIds: string[]) {
+    const { error: deleteError } = await supabase.from('usuarios_operadoras').delete().eq('usuario_id', userId);
+    if (deleteError && deleteError.code === '42P01') {
+        console.warn('Tabla usuarios_operadoras no existe, ignorando sincronización');
+        return { data: [], error: null };
+    }
+    if (deleteError) throw deleteError;
+    if (operadoraIds.length === 0) {
+        return { data: [], error: null };
+    }
+    const { error: insertError, data } = await supabase.from('usuarios_operadoras').insert(
+        operadoraIds.map((operadoraId) => ({
+            usuario_id: userId,
+            operadora_id: operadoraId,
+        })),
+    );
+    if (insertError && insertError.code === '42P01') {
+        console.warn('Tabla usuarios_operadoras no existe, ignorando sincronización');
+        return { data: [], error: null };
+    }
+    if (insertError) throw insertError;
+    return { data, error: null };
+}
+
 // Cubiertas - movimientos (ingresos/salidas)
 export async function createCubiertaMovimiento(payload: {
     item_id?: string | null;

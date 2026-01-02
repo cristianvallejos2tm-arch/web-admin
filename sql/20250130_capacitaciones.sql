@@ -69,3 +69,22 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER capacitaciones_inscripciones_refresh
 AFTER INSERT OR DELETE OR UPDATE ON public.capacitaciones_inscripciones
 FOR EACH ROW EXECUTE FUNCTION public.refresh_capacitaciones_inscriptos();
+
+CREATE TABLE public.operadoras (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  nombre character varying NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT operadoras_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE public.usuarios_operadoras (
+  usuario_id uuid NOT NULL,
+  operadora_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT usuarios_operadoras_pkey PRIMARY KEY (usuario_id, operadora_id),
+  CONSTRAINT usuarios_operadoras_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id) ON DELETE CASCADE,
+  CONSTRAINT usuarios_operadoras_operadora_id_fkey FOREIGN KEY (operadora_id) REFERENCES public.operadoras(id) ON DELETE CASCADE
+);
+
+ALTER TABLE public.usuarios
+  ADD COLUMN IF NOT EXISTS base_id uuid REFERENCES public.bases(id);
