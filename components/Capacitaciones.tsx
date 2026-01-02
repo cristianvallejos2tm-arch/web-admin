@@ -8,6 +8,7 @@ import {
   Trash2,
   Users,
   Video,
+  X,
 } from 'lucide-react';
 
 interface QuestionRow {
@@ -27,6 +28,13 @@ interface TrainingSession {
   status: string;
   participants: number;
   capacity: number;
+}
+interface Participant {
+  id: string;
+  name: string;
+  role: string;
+  status: 'Confirmado' | 'Pendiente' | 'Rechazado';
+  since: string;
 }
 
 const emptyQuestion = (): QuestionRow => ({
@@ -78,6 +86,21 @@ const trainingSessions: TrainingSession[] = [
     capacity: 20,
   },
 ];
+const participantsRegistry: Record<number, Participant[]> = {
+  1: [
+    { id: 'u101', name: 'Lucas Moreno', role: 'Operador', status: 'Confirmado', since: '12/01/2026' },
+    { id: 'u102', name: 'Fernanda Ruiz', role: 'Técnico', status: 'Confirmado', since: '13/01/2026' },
+    { id: 'u103', name: 'Marcos Pérez', role: 'Coordinador', status: 'Pendiente', since: '15/01/2026' },
+  ],
+  2: [
+    { id: 'u104', name: 'Mónica Vega', role: 'Supervisor', status: 'Confirmado', since: '10/01/2026' },
+    { id: 'u105', name: 'Gabriel Soto', role: 'Técnico', status: 'Confirmado', since: '11/01/2026' },
+  ],
+  3: [
+    { id: 'u106', name: 'Daniela Costa', role: 'Operador', status: 'Pendiente', since: '09/01/2026' },
+    { id: 'u107', name: 'Ignacio Funes', role: 'Analista', status: 'Confirmado', since: '14/01/2026' },
+  ],
+};
 
 const Capacitaciones: React.FC = () => {
   const [title, setTitle] = useState('');
@@ -90,6 +113,8 @@ const Capacitaciones: React.FC = () => {
   const [questions, setQuestions] = useState<QuestionRow[]>([emptyQuestion()]);
   const [showForm, setShowForm] = useState(false);
   const [editingSession, setEditingSession] = useState<TrainingSession | null>(null);
+  const [detailSession, setDetailSession] = useState<TrainingSession | null>(null);
+  const [participantsSession, setParticipantsSession] = useState<TrainingSession | null>(null);
 
   const totalParticipants = useMemo(
     () => trainingSessions.reduce((acc, session) => acc + session.participants, 0),
@@ -187,12 +212,14 @@ const Capacitaciones: React.FC = () => {
   };
 
   const viewDetails = (session: TrainingSession) => {
-    console.log('Ver detalle de', session.id);
+    setDetailSession(session);
   };
 
   const viewParticipants = (session: TrainingSession) => {
-    console.log('Usuarios inscriptos de', session.id);
+    setParticipantsSession(session);
   };
+
+  const currentParticipants = participantsSession ? participantsRegistry[participantsSession.id] ?? [] : [];
 
   return (
     <div className="space-y-6">
@@ -509,6 +536,134 @@ const Capacitaciones: React.FC = () => {
             </div>
           </form>
         </section>
+      )}
+
+      {detailSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Detalle</p>
+                <h3 className="text-lg font-semibold text-stone-900">{detailSession.title}</h3>
+              </div>
+              <button
+                onClick={() => setDetailSession(null)}
+                className="text-stone-400 transition hover:text-stone-900"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              <p className="text-sm text-stone-500">{detailSession.description}</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <article className="rounded-2xl bg-stone-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-stone-400">Tipo</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.type}</p>
+                </article>
+                <article className="rounded-2xl bg-stone-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-stone-400">Instructor</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.instructor}</p>
+                </article>
+                <article className="rounded-2xl bg-stone-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-stone-400">Fecha</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.date}</p>
+                </article>
+                <article className="rounded-2xl bg-stone-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-stone-400">Ubicación</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.location}</p>
+                </article>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    detailSession.status === 'Abierta'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : detailSession.status === 'Inscripciones cerradas'
+                        ? 'bg-stone-100 text-stone-600'
+                        : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {detailSession.status}
+                </span>
+                <span className="text-xs text-stone-500">
+                  {detailSession.participants}/{detailSession.capacity} inscriptos
+                </span>
+              </div>
+              <div className="rounded-2xl border border-stone-100 p-4 text-sm text-stone-600">
+                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducción</p>
+                <p className="mt-2 text-sm text-stone-700">{detailSession.intro}</p>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDetailSession(null)}
+                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {participantsSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Usuarios inscriptos</p>
+                <h3 className="text-lg font-semibold text-stone-900">{participantsSession.title}</h3>
+              </div>
+              <button
+                onClick={() => setParticipantsSession(null)}
+                className="text-stone-400 transition hover:text-stone-900"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              {currentParticipants.length === 0 ? (
+                <p className="text-sm text-stone-500">No hay usuarios inscriptos aún.</p>
+              ) : (
+                <div className="space-y-3">
+                  {currentParticipants.map((participant) => (
+                    <article key={participant.id} className="flex items-center justify-between rounded-2xl border border-stone-100 p-4">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-900">{participant.name}</p>
+                        <p className="text-xs text-stone-400">{participant.role}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Estado</p>
+                        <p
+                          className={`text-sm font-semibold ${
+                            participant.status === 'Confirmado'
+                              ? 'text-emerald-600'
+                              : participant.status === 'Pendiente'
+                                ? 'text-amber-600'
+                                : 'text-red-600'
+                          }`}
+                        >
+                          {participant.status}
+                        </p>
+                        <p className="text-xs text-stone-400">{participant.since} - inscripción</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setParticipantsSession(null)}
+                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
