@@ -416,3 +416,88 @@ export async function updateMaintenance(id: string, payload: Partial<{
 export async function deleteMaintenance(id: string) {
     return supabase.from('mantenimientos').delete().eq('id', id);
 }
+
+// Capacitaciones
+export async function fetchCapacitaciones() {
+    return supabase
+        .from('capacitaciones')
+        .select(
+            'id, titulo, introduccion, descripcion, tipo, instructor, ubicacion, fecha, estado, capacidad, inscriptos, cuestionario_nombre, video_url, archivos, created_at',
+        )
+        .order('created_at', { ascending: false });
+}
+
+export async function fetchCapacitacionDetail(id: string) {
+    return supabase.from('capacitaciones').select('*').eq('id', id).single();
+}
+
+export async function fetchCapacitacionParticipants(capacitacionId: string) {
+    return supabase
+        .from('capacitaciones_inscripciones')
+        .select('id, estado, created_at, usuarios(id, nombre, email)')
+        .eq('capacitacion_id', capacitacionId)
+        .order('created_at', { ascending: true });
+}
+
+export async function fetchCapacitacionPreguntas(capacitacionId: string) {
+    return supabase
+        .from('capacitaciones_preguntas')
+        .select('id, pregunta, respuesta, orden')
+        .eq('capacitacion_id', capacitacionId)
+        .order('orden', { ascending: true });
+}
+
+export async function createCapacitacion(payload: {
+    titulo: string;
+    introduccion?: string;
+    descripcion?: string;
+    tipo?: string;
+    instructor?: string;
+    ubicacion?: string;
+    fecha?: string;
+    estado?: string;
+    capacidad?: number;
+    inscriptos?: number;
+    cuestionario_nombre?: string;
+    video_url?: string;
+    archivos?: { name?: string; url?: string }[];
+    created_by?: string | null;
+}) {
+    return supabase.from('capacitaciones').insert([payload]).select('id').single();
+}
+
+export async function updateCapacitacion(id: string, payload: Partial<{
+    titulo: string;
+    introduccion: string;
+    descripcion: string;
+    tipo: string;
+    instructor: string;
+    ubicacion: string;
+    fecha: string;
+    estado: string;
+    capacidad: number;
+    inscriptos: number;
+    cuestionario_nombre: string;
+    video_url: string;
+    archivos: { name?: string; url?: string }[];
+}>) {
+    return supabase.from('capacitaciones').update(payload).eq('id', id);
+}
+
+export async function upsertCapacitacionPreguntas(
+    capacitacionId: string,
+    preguntas: Array<{ question: string; answer: string }>,
+) {
+    await supabase.from('capacitaciones_preguntas').delete().eq('capacitacion_id', capacitacionId);
+    if (preguntas.length === 0) {
+        return { data: [], error: null };
+    }
+    return supabase.from('capacitaciones_preguntas').insert(
+        preguntas.map((pregunta, index) => ({
+            capacitacion_id: capacitacionId,
+            orden: index,
+            pregunta: pregunta.question,
+            respuesta: pregunta.answer,
+        })),
+    );
+}

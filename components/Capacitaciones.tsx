@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpenCheck,
   CalendarDays,
@@ -10,128 +10,130 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import {
+  createCapacitacion,
+  fetchCapacitacionDetail,
+  fetchCapacitacionParticipants,
+  fetchCapacitacionPreguntas,
+  fetchCapacitaciones,
+  updateCapacitacion,
+  upsertCapacitacionPreguntas,
+} from '../services/supabase';
 
 interface QuestionRow {
-  id: number;
+  id: string;
   question: string;
   answer: string;
 }
-interface TrainingSession {
-  id: number;
-  title: string;
-  intro: string;
-  description: string;
-  date: string;
-  location: string;
-  type: string;
-  instructor: string;
-  status: string;
-  participants: number;
-  capacity: number;
+
+interface AttachmentInput {
+  label: string;
+  name?: string;
+  url?: string;
+  file?: File | null;
 }
-interface Participant {
+
+interface CapacitacionSummary {
   id: string;
-  name: string;
-  role: string;
-  status: 'Confirmado' | 'Pendiente' | 'Rechazado';
-  since: string;
+  titulo: string;
+  introduccion?: string;
+  descripcion?: string;
+  tipo?: string;
+  instructor?: string;
+  ubicacion?: string;
+  fecha?: string;
+  estado?: string;
+  capacidad?: number;
+  inscriptos?: number;
+  cuestionario_nombre?: string;
+  video_url?: string;
+  archivos?: Array<{ name?: string; url?: string }>;
+}
+
+interface ParticipantRecord {
+  id: string;
+  estado: string;
+  created_at: string;
+  usuarios?: {
+    id: string;
+    nombre: string;
+    email: string;
+  };
 }
 
 const emptyQuestion = (): QuestionRow => ({
-  id: Date.now() + Math.random(),
+  id: `${Date.now()}-${Math.random()}`,
   question: '',
   answer: '',
 });
 
-const trainingSessions: TrainingSession[] = [
-  {
-    id: 1,
-    title: 'Capacitación en seguridad vial',
-    intro: 'Buenas prácticas y normativa en ruta',
-    description: 'Recorrido por las políticas de velocidad, uso de cinturón y señalización preventiva.',
-    date: '27/01/2026 · 09:00',
-    location: 'Sala de Mandos',
-    type: 'Presencial',
-    instructor: 'María López',
-    status: 'Abierta',
-    participants: 24,
-    capacity: 30,
-  },
-  {
-    id: 2,
-    title: 'Mantenimiento preventivo para técnicos',
-    intro: 'Revisión y documentación semanal',
-    description:
-      'Estrategia para inspección de sistemas críticos, registros en la planilla digital y cargas de piezas.',
-    date: '03/02/2026 · 14:30',
-    location: 'Auditorio Principal + Teams',
-    type: 'Híbrida',
-    instructor: 'Rodrigo Díaz',
-    status: 'Inscripciones cerradas',
-    participants: 16,
-    capacity: 16,
-  },
-  {
-    id: 3,
-    title: 'Gestión de turnos y documentación',
-    intro: 'Normaliza la entrega de informes',
-    description:
-      'Documentación obligatoria, formatos de hojas de ruta y criterios de entrega para los coordinadores de turno.',
-    date: '10/02/2026 · 11:00',
-    location: 'Plataforma LMS',
-    type: 'Virtual',
-    instructor: 'Ana Torres',
-    status: 'En espera',
-    participants: 8,
-    capacity: 20,
-  },
-];
-const participantsRegistry: Record<number, Participant[]> = {
-  1: [
-    { id: 'u101', name: 'Lucas Moreno', role: 'Operador', status: 'Confirmado', since: '12/01/2026' },
-    { id: 'u102', name: 'Fernanda Ruiz', role: 'Técnico', status: 'Confirmado', since: '13/01/2026' },
-    { id: 'u103', name: 'Marcos Pérez', role: 'Coordinador', status: 'Pendiente', since: '15/01/2026' },
-  ],
-  2: [
-    { id: 'u104', name: 'Mónica Vega', role: 'Supervisor', status: 'Confirmado', since: '10/01/2026' },
-    { id: 'u105', name: 'Gabriel Soto', role: 'Técnico', status: 'Confirmado', since: '11/01/2026' },
-  ],
-  3: [
-    { id: 'u106', name: 'Daniela Costa', role: 'Operador', status: 'Pendiente', since: '09/01/2026' },
-    { id: 'u107', name: 'Ignacio Funes', role: 'Analista', status: 'Confirmado', since: '14/01/2026' },
-  ],
-};
+const emptyAttachments = (): AttachmentInput[] =>
+  Array.from({ length: 3 }, (_, index) => ({
+    label: `Archivo ${index + 1}`,
+    name: '',
+    url: '',
+    file: null,
+  }));
 
 const Capacitaciones: React.FC = () => {
+  const [trainings, setTrainings] = useState<CapacitacionSummary[]>([]);
+  const [isListLoading, setIsListLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+
   const [title, setTitle] = useState('');
   const [intro, setIntro] = useState('');
   const [description, setDescription] = useState('');
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [, setVideoFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState('');
-  const [attachments, setAttachments] = useState<Array<File | null>>([null, null, null]);
+  const [attachments, setAttachments] = useState<AttachmentInput[]>(emptyAttachments());
   const [questionnaireName, setQuestionnaireName] = useState('');
   const [questions, setQuestions] = useState<QuestionRow[]>([emptyQuestion()]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingSession, setEditingSession] = useState<TrainingSession | null>(null);
-  const [detailSession, setDetailSession] = useState<TrainingSession | null>(null);
-  const [participantsSession, setParticipantsSession] = useState<TrainingSession | null>(null);
+
+  const [editingSession, setEditingSession] = useState<CapacitacionSummary | null>(null);
+  const [detailSession, setDetailSession] = useState<CapacitacionSummary | null>(null);
+  const [participantsSession, setParticipantsSession] = useState<CapacitacionSummary | null>(null);
+  const [currentParticipants, setCurrentParticipants] = useState<ParticipantRecord[]>([]);
+
+  const loadCapacitaciones = async () => {
+    setIsListLoading(true);
+    const { data, error } = await fetchCapacitaciones();
+    setIsListLoading(false);
+    if (error) {
+      console.error('Error cargando capacitaciones', error);
+      return;
+    }
+    setTrainings(data ?? []);
+  };
+
+  useEffect(() => {
+    loadCapacitaciones();
+  }, []);
 
   const totalParticipants = useMemo(
-    () => trainingSessions.reduce((acc, session) => acc + session.participants, 0),
-    [],
+    () => trainings.reduce((acc, session) => acc + (session.inscriptos ?? 0), 0),
+    [trainings],
   );
+
   const openSessions = useMemo(
-    () => trainingSessions.filter((session) => session.participants < session.capacity).length,
-    [],
+    () =>
+      trainings.filter(
+        (session) =>
+          session.estado === 'Abierta' ||
+          (!!session.capacidad && (session.inscriptos ?? 0) < session.capacidad),
+      ).length,
+    [trainings],
   );
 
   const summaryCards = useMemo(
     () => [
-      { id: 'sessions', label: 'Capacitaciones activas', value: trainingSessions.length.toString(), icon: CalendarDays },
+      { id: 'sessions', label: 'Capacitaciones activas', value: trainings.length.toString(), icon: CalendarDays },
       { id: 'participants', label: 'Total inscriptos', value: totalParticipants.toString(), icon: Users },
       { id: 'open', label: 'Cupos disponibles', value: openSessions.toString(), icon: BookOpenCheck },
     ],
-    [totalParticipants, openSessions],
+    [openSessions, totalParticipants, trainings.length],
   );
 
   const canSave = useMemo(() => {
@@ -144,7 +146,7 @@ const Capacitaciones: React.FC = () => {
     setDescription('');
     setVideoFile(null);
     setVideoLink('');
-    setAttachments([null, null, null]);
+    setAttachments(emptyAttachments());
     setQuestionnaireName('');
     setQuestions([emptyQuestion()]);
   };
@@ -155,54 +157,119 @@ const Capacitaciones: React.FC = () => {
     setShowForm(true);
   };
 
-  const startEdit = (session: TrainingSession) => {
-    resetFormFields();
-    setTitle(session.title);
-    setIntro(session.intro);
-    setDescription(session.description);
-    setQuestionnaireName(`Planilla ${session.title}`);
-    setEditingSession(session);
-    setShowForm(true);
+  const startEdit = async (session: CapacitacionSummary) => {
+    setIsFormLoading(true);
+    try {
+      const { data } = await fetchCapacitacionDetail(session.id);
+      const record = data ?? session;
+      setEditingSession(record);
+      setTitle(record.titulo ?? '');
+      setIntro(record.introduccion ?? '');
+      setDescription(record.descripcion ?? '');
+      setVideoLink(record.video_url ?? '');
+      setQuestionnaireName(record.cuestionario_nombre ?? '');
+      setAttachments(
+        Array.from({ length: 3 }, (_, index) => {
+          const existing = record.archivos?.[index];
+          return {
+            label: `Archivo ${index + 1}`,
+            name: existing?.name ?? '',
+            url: existing?.url ?? '',
+            file: null,
+          };
+        }),
+      );
+      const { data: questionsData } = await fetchCapacitacionPreguntas(session.id);
+      if (questionsData && questionsData.length > 0) {
+        setQuestions(
+          questionsData.map((question) => ({
+            id: question.id,
+            question: question.pregunta,
+            answer: question.respuesta,
+          })),
+        );
+      } else {
+        setQuestions([emptyQuestion()]);
+      }
+      setShowForm(true);
+    } catch (error) {
+      console.error('Error cargando la capacitación', error);
+    } finally {
+      setIsFormLoading(false);
+    }
   };
 
   const handleAttachmentChange = (index: number, file: File | null) => {
-    setAttachments((current) => {
-      const clone = [...current];
-      clone[index] = file;
-      return clone;
-    });
+    setAttachments((current) =>
+      current.map((attachment, idx) =>
+        idx === index
+          ? {
+              ...attachment,
+              file,
+              name: file ? file.name : attachment.name,
+            }
+          : attachment,
+      ),
+    );
   };
 
   const addQuestion = () => setQuestions((current) => [...current, emptyQuestion()]);
 
-  const removeQuestion = (id: number) => {
+  const removeQuestion = (id: string) => {
     if (questions.length === 1) return;
-    setQuestions((current) => current.filter((q) => q.id !== id));
+    setQuestions((current) => current.filter((question) => question.id !== id));
   };
 
-  const updateQuestionField = (id: number, field: 'question' | 'answer', value: string) => {
+  const updateQuestionField = (id: string, field: 'question' | 'answer', value: string) => {
     setQuestions((current) =>
       current.map((question) => (question.id === id ? { ...question, [field]: value } : question)),
     );
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
-    console.log('Guardar capacitación', {
-      title,
-      intro,
-      description,
-      videoFile,
-      videoLink,
-      attachments,
-      questionnaireName,
-      questions,
-      mode: editingSession ? 'edit' : 'create',
-    });
-    resetFormFields();
-    setEditingSession(null);
-    setShowForm(false);
+    setIsSaving(true);
+    const attachmentsPayload = attachments.map((attachment) => ({
+      name: attachment.name || attachment.file?.name || '',
+      url: attachment.url || '',
+    }));
+    const payload = {
+      titulo: title,
+      introduccion: intro,
+      descripcion: description,
+      tipo: editingSession?.tipo ?? 'Virtual',
+      instructor: editingSession?.instructor ?? 'Equipo CAM',
+      ubicacion: editingSession?.ubicacion ?? 'Instalaciones CAM',
+      estado: editingSession?.estado ?? 'borrador',
+      capacidad: editingSession?.capacidad ?? 0,
+      cuestionario_nombre: questionnaireName,
+      video_url: videoLink,
+      archivos: attachmentsPayload,
+    };
+    try {
+      let capacitacionId = editingSession?.id;
+      if (capacitacionId) {
+        await updateCapacitacion(capacitacionId, payload);
+      } else {
+        const { data } = await createCapacitacion(payload);
+        capacitacionId = data?.id ?? null;
+      }
+      if (capacitacionId) {
+        await upsertCapacitacionPreguntas(
+          capacitacionId,
+          questions.map((question) => ({ question: question.question, answer: question.answer })),
+        );
+      }
+      resetFormFields();
+      setEditingSession(null);
+      setShowForm(false);
+      await loadCapacitaciones();
+    } catch (error) {
+      console.error('Error guardando la capacitación', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -211,15 +278,23 @@ const Capacitaciones: React.FC = () => {
     setShowForm(false);
   };
 
-  const viewDetails = (session: TrainingSession) => {
-    setDetailSession(session);
+  const viewDetails = async (session: CapacitacionSummary) => {
+    const { data } = await fetchCapacitacionDetail(session.id);
+    setDetailSession(data ?? session);
   };
 
-  const viewParticipants = (session: TrainingSession) => {
+  const viewParticipants = async (session: CapacitacionSummary) => {
     setParticipantsSession(session);
+    setParticipantsLoading(true);
+    const { data } = await fetchCapacitacionParticipants(session.id);
+    setParticipantsLoading(false);
+    setCurrentParticipants(data ?? []);
   };
 
-  const currentParticipants = participantsSession ? participantsRegistry[participantsSession.id] ?? [] : [];
+  const closeParticipants = () => {
+    setParticipantsSession(null);
+    setCurrentParticipants([]);
+  };
 
   return (
     <div className="space-y-6">
@@ -261,7 +336,7 @@ const Capacitaciones: React.FC = () => {
                     <span className="text-xs uppercase tracking-wide">{card.label}</span>
                   </div>
                   <p className="text-3xl font-bold text-stone-900">{card.value}</p>
-                  <p className="text-xs text-stone-400">Actualizado hace unos minutos</p>
+                  <p className="text-xs text-stone-400">{isListLoading ? 'Actualizando...' : 'Actualizado hace unos minutos'}</p>
                 </article>
               );
             })}
@@ -270,39 +345,39 @@ const Capacitaciones: React.FC = () => {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-stone-900">Próximas sesiones</h2>
-              <span className="text-sm text-stone-500">Filtra y gestiona las planillas de preguntas</span>
+              <span className="text-sm text-stone-500">{isListLoading ? 'Cargando...' : 'Filtra y gestiona las planillas de preguntas'}</span>
             </div>
             <div className="grid gap-4">
-              {trainingSessions.map((session) => (
+              {trainings.map((session) => (
                 <article
                   key={session.id}
                   className="bg-white border border-stone-200 rounded-3xl p-5 shadow-sm transition hover:border-amber-200"
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <p className="text-sm text-stone-500">{session.type}</p>
-                      <h3 className="text-2xl font-semibold text-stone-900">{session.title}</h3>
+                      <p className="text-sm text-stone-500">{session.tipo ?? 'General'}</p>
+                      <h3 className="text-2xl font-semibold text-stone-900">{session.titulo}</h3>
                       <p className="text-sm text-stone-500">{session.instructor}</p>
                     </div>
                     <div className="text-sm text-stone-500">
-                      <p>{session.date}</p>
-                      <p>{session.location}</p>
+                      <p>{session.fecha ? new Date(session.fecha).toLocaleString() : 'Fecha por definir'}</p>
+                      <p>{session.ubicacion ?? 'Ubicación por definir'}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4 text-sm">
                     <p className="text-stone-500">
-                      {session.participants}/{session.capacity} inscritos
+                      {(session.inscriptos ?? 0)}/{session.capacidad ?? 0} inscritos
                     </p>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        session.status === 'Abierta'
+                        session.estado === 'Abierta'
                           ? 'bg-emerald-100 text-emerald-700'
-                          : session.status === 'Inscripciones cerradas'
+                          : session.estado === 'Inscripciones cerradas'
                             ? 'bg-stone-100 text-stone-600'
                             : 'bg-amber-100 text-amber-700'
                       }`}
                     >
-                      {session.status}
+                      {session.estado ?? 'Borrador'}
                     </span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
@@ -333,6 +408,11 @@ const Capacitaciones: React.FC = () => {
                   </div>
                 </article>
               ))}
+              {!isListLoading && trainings.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-6 text-center text-sm text-stone-500">
+                  Aún no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.
+                </div>
+              )}
             </div>
           </section>
         </>
@@ -354,187 +434,197 @@ const Capacitaciones: React.FC = () => {
               Define el contenido, el soporte multimedia y las planillas de preguntas para que los usuarios las completen al finalizar.
             </p>
           </div>
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitación</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2 text-sm text-stone-600">
-                  Título:
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                    placeholder="Título de la capacitación"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-stone-600">
-                  Breve introducción:
-                  <textarea
-                    value={intro}
-                    onChange={(event) => setIntro(event.target.value)}
-                    className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                    rows={3}
-                    placeholder="Resumen corto del objetivo de la sesión"
-                  />
-                </label>
-              </div>
-              <label className="space-y-2 text-sm text-stone-600">
-                Descripción completa:
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                  rows={4}
-                  placeholder="Detalle el temario, duración, requisitos y destinatarios"
-                />
-              </label>
-            </section>
 
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-stone-900">Video</h2>
-              <div className="md:grid md:grid-cols-2 gap-4">
-                <label className="space-y-2 text-sm text-stone-600">
-                  Subir archivo MP4/MP3:
-                  <div className="flex items-center gap-2 rounded-xl border border-stone-200 p-3">
-                    <Video size={18} className="text-stone-400" />
+          {isFormLoading ? (
+            <div className="rounded-3xl border border-stone-100 bg-stone-50 p-6 text-center text-sm text-stone-500">
+              Cargando los datos de la capacitación...
+            </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitación</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm text-stone-600">
+                    Título:
                     <input
-                      type="file"
-                      accept="video/mp4,audio/mpeg"
-                      onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
-                      className="text-sm text-stone-500"
+                      type="text"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                      placeholder="Título de la capacitación"
                     />
-                  </div>
-                </label>
+                  </label>
+                  <label className="space-y-2 text-sm text-stone-600">
+                    Breve introducción:
+                    <textarea
+                      value={intro}
+                      onChange={(event) => setIntro(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                      rows={3}
+                      placeholder="Resumen corto del objetivo de la sesión"
+                    />
+                  </label>
+                </div>
                 <label className="space-y-2 text-sm text-stone-600">
-                  O pegar URL externa (YouTube, Vimeo, etc):
-                  <input
-                    type="url"
-                    value={videoLink}
-                    onChange={(event) => setVideoLink(event.target.value)}
+                  Descripción completa:
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
                     className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                    placeholder="https://www.youtube.com/..."
+                    rows={4}
+                    placeholder="Detalle el temario, duración, requisitos y destinatarios"
                   />
                 </label>
-              </div>
-            </section>
+              </section>
 
-            <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-stone-900">Archivos adjuntos</h2>
-                <span className="text-xs text-stone-400">Máx. 3 archivos</span>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                {attachments.map((attachment, index) => (
-                  <label key={index} className="space-y-2 text-sm text-stone-600">
-                    Archivo {index + 1}:
-                    <div className="flex items-center gap-2 rounded-xl border border-stone-200 p-3 text-sm">
-                      <Paperclip size={18} className="text-stone-500" />
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-stone-900">Video</h2>
+                <div className="md:grid md:grid-cols-2 gap-4">
+                  <label className="space-y-2 text-sm text-stone-600">
+                    Subir archivo MP4/MP3:
+                    <div className="flex items-center gap-2 rounded-xl border border-stone-200 p-3">
+                      <Video size={18} className="text-stone-400" />
                       <input
                         type="file"
-                        onChange={(event) => handleAttachmentChange(index, event.target.files?.[0] ?? null)}
+                        accept="video/mp4,audio/mpeg"
+                        onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
                         className="text-sm text-stone-500"
                       />
                     </div>
                   </label>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <div className="grid md:grid-cols-[1fr,150px] gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-stone-900">Cuestionario</h2>
-                  <p className="text-xs text-stone-400">Define la plantilla que completarán los usuarios</p>
+                  <label className="space-y-2 text-sm text-stone-600">
+                    O pegar URL externa (YouTube, Vimeo, etc):
+                    <input
+                      type="url"
+                      value={videoLink}
+                      onChange={(event) => setVideoLink(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                      placeholder="https://www.youtube.com/..."
+                    />
+                  </label>
                 </div>
-                <label className="space-y-2 text-sm text-stone-600">
-                  Nombre del cuestionario:
-                  <input
-                    type="text"
-                    value={questionnaireName}
-                    onChange={(event) => setQuestionnaireName(event.target.value)}
-                    className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                    placeholder="Ej. Revisión técnica mensual"
-                  />
-                </label>
-              </div>
+              </section>
 
-              <div className="space-y-3">
+              <section className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-stone-900">Preguntas y respuestas</h3>
-                  <button
-                    type="button"
-                    onClick={addQuestion}
-                    className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-600"
-                  >
-                    <Plus size={14} />
-                    Agregar pregunta
-                  </button>
+                  <h2 className="text-lg font-semibold text-stone-900">Archivos adjuntos</h2>
+                  <span className="text-xs text-stone-400">Máx. 3 archivos</span>
                 </div>
-                <div className="space-y-3">
-                  {questions.map((question) => (
-                    <div
-                      key={question.id}
-                      className="rounded-2xl border border-stone-200 p-4 shadow-sm transition hover:border-amber-200"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-stone-900">Pregunta</h4>
-                        <button
-                          type="button"
-                          onClick={() => removeQuestion(question.id)}
-                          className="text-stone-400 transition hover:text-red-500"
-                          aria-label="Eliminar pregunta"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      <label className="mt-3 block space-y-2 text-sm text-stone-600">
-                        Enunciado:
+                <div className="grid gap-3 md:grid-cols-3">
+                  {attachments.map((attachment, index) => (
+                    <label key={index} className="space-y-2 text-sm text-stone-600">
+                      {attachment.label}:
+                      <div className="flex items-center gap-2 rounded-xl border border-stone-200 p-3 text-sm">
+                        <Paperclip size={18} className="text-stone-500" />
                         <input
-                          type="text"
-                          value={question.question}
-                          onChange={(event) => updateQuestionField(question.id, 'question', event.target.value)}
-                          className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                          placeholder="Describe la situación a evaluar"
+                          type="file"
+                          onChange={(event) => handleAttachmentChange(index, event.target.files?.[0] ?? null)}
+                          className="text-sm text-stone-500"
                         />
-                      </label>
-                      <label className="mt-3 block space-y-2 text-sm text-stone-600">
-                        Respuesta esperada:
-                        <textarea
-                          value={question.answer}
-                          onChange={(event) => updateQuestionField(question.id, 'answer', event.target.value)}
-                          className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                          rows={3}
-                          placeholder="Describe los criterios que deben cumplirse"
-                        />
-                      </label>
-                    </div>
+                      </div>
+                      {attachment.url && (
+                        <p className="text-xs text-stone-500">Archivo guardado: {attachment.url}</p>
+                      )}
+                    </label>
                   ))}
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-100 pt-4">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={!canSave}
-                className={`rounded-full px-6 py-2 text-sm font-semibold text-white shadow-sm transition ${
-                  canSave
-                    ? 'bg-amber-500 hover:bg-amber-600'
-                    : 'bg-stone-300 cursor-not-allowed'
-                }`}
-              >
-                Guardar capacitación
-              </button>
-            </div>
-          </form>
+              <section className="space-y-4">
+                <div className="grid md:grid-cols-[1fr,150px] gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-stone-900">Cuestionario</h2>
+                    <p className="text-xs text-stone-400">Define la plantilla que completarán los usuarios</p>
+                  </div>
+                  <label className="space-y-2 text-sm text-stone-600">
+                    Nombre del cuestionario:
+                    <input
+                      type="text"
+                      value={questionnaireName}
+                      onChange={(event) => setQuestionnaireName(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                      placeholder="Ej. Revisión técnica mensual"
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-stone-900">Preguntas y respuestas</h3>
+                    <button
+                      type="button"
+                      onClick={addQuestion}
+                      className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-600"
+                    >
+                      <Plus size={14} />
+                      Agregar pregunta
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {questions.map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-2xl border border-stone-200 p-4 shadow-sm transition hover:border-amber-200"
+                      >
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-stone-900">Pregunta</h4>
+                          <button
+                            type="button"
+                            onClick={() => removeQuestion(question.id)}
+                            className="text-stone-400 transition hover:text-red-500"
+                            aria-label="Eliminar pregunta"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <label className="mt-3 block space-y-2 text-sm text-stone-600">
+                          Enunciado:
+                          <input
+                            type="text"
+                            value={question.question}
+                            onChange={(event) => updateQuestionField(question.id, 'question', event.target.value)}
+                            className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                            placeholder="Describe la situación a evaluar"
+                          />
+                        </label>
+                        <label className="mt-3 block space-y-2 text-sm text-stone-600">
+                          Respuesta esperada:
+                          <textarea
+                            value={question.answer}
+                            onChange={(event) => updateQuestionField(question.id, 'answer', event.target.value)}
+                            className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                            rows={3}
+                            placeholder="Describe los criterios que deben cumplirse"
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!canSave || isSaving}
+                  className={`rounded-full px-6 py-2 text-sm font-semibold text-white shadow-sm transition ${
+                    canSave && !isSaving
+                      ? 'bg-amber-500 hover:bg-amber-600'
+                      : 'bg-stone-300 cursor-not-allowed'
+                  }`}
+                >
+                  {isSaving ? 'Guardando...' : 'Guardar capacitación'}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       )}
 
@@ -544,7 +634,7 @@ const Capacitaciones: React.FC = () => {
             <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Detalle</p>
-                <h3 className="text-lg font-semibold text-stone-900">{detailSession.title}</h3>
+                <h3 className="text-lg font-semibold text-stone-900">{detailSession.titulo}</h3>
               </div>
               <button
                 onClick={() => setDetailSession(null)}
@@ -554,44 +644,46 @@ const Capacitaciones: React.FC = () => {
               </button>
             </div>
             <div className="space-y-4 p-6">
-              <p className="text-sm text-stone-500">{detailSession.description}</p>
+              <p className="text-sm text-stone-500">{detailSession.descripcion}</p>
               <div className="grid gap-4 md:grid-cols-2">
                 <article className="rounded-2xl bg-stone-50 p-4">
                   <p className="text-xs uppercase tracking-wide text-stone-400">Tipo</p>
-                  <p className="text-sm font-semibold text-stone-900">{detailSession.type}</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.tipo ?? 'General'}</p>
                 </article>
                 <article className="rounded-2xl bg-stone-50 p-4">
                   <p className="text-xs uppercase tracking-wide text-stone-400">Instructor</p>
-                  <p className="text-sm font-semibold text-stone-900">{detailSession.instructor}</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.instructor ?? 'Equipo CAM'}</p>
                 </article>
                 <article className="rounded-2xl bg-stone-50 p-4">
                   <p className="text-xs uppercase tracking-wide text-stone-400">Fecha</p>
-                  <p className="text-sm font-semibold text-stone-900">{detailSession.date}</p>
+                  <p className="text-sm font-semibold text-stone-900">
+                    {detailSession.fecha ? new Date(detailSession.fecha).toLocaleString() : 'Por definir'}
+                  </p>
                 </article>
                 <article className="rounded-2xl bg-stone-50 p-4">
                   <p className="text-xs uppercase tracking-wide text-stone-400">Ubicación</p>
-                  <p className="text-sm font-semibold text-stone-900">{detailSession.location}</p>
+                  <p className="text-sm font-semibold text-stone-900">{detailSession.ubicacion ?? 'Por definir'}</p>
                 </article>
               </div>
               <div className="flex items-center gap-3">
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    detailSession.status === 'Abierta'
+                    detailSession.estado === 'Abierta'
                       ? 'bg-emerald-100 text-emerald-700'
-                      : detailSession.status === 'Inscripciones cerradas'
+                      : detailSession.estado === 'Inscripciones cerradas'
                         ? 'bg-stone-100 text-stone-600'
                         : 'bg-amber-100 text-amber-700'
                   }`}
                 >
-                  {detailSession.status}
+                  {detailSession.estado ?? 'Borrador'}
                 </span>
                 <span className="text-xs text-stone-500">
-                  {detailSession.participants}/{detailSession.capacity} inscriptos
+                  {(detailSession.inscriptos ?? 0)}/{detailSession.capacidad ?? 0} inscriptos
                 </span>
               </div>
               <div className="rounded-2xl border border-stone-100 p-4 text-sm text-stone-600">
                 <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducción</p>
-                <p className="mt-2 text-sm text-stone-700">{detailSession.intro}</p>
+                <p className="mt-2 text-sm text-stone-700">{detailSession.introduccion}</p>
               </div>
               <div className="flex justify-end">
                 <button
@@ -613,40 +705,47 @@ const Capacitaciones: React.FC = () => {
             <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Usuarios inscriptos</p>
-                <h3 className="text-lg font-semibold text-stone-900">{participantsSession.title}</h3>
+                <h3 className="text-lg font-semibold text-stone-900">{participantsSession.titulo}</h3>
               </div>
               <button
-                onClick={() => setParticipantsSession(null)}
+                onClick={closeParticipants}
                 className="text-stone-400 transition hover:text-stone-900"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="space-y-4 p-6">
-              {currentParticipants.length === 0 ? (
+              {participantsLoading ? (
+                <p className="text-sm text-stone-500">Cargando participantes...</p>
+              ) : currentParticipants.length === 0 ? (
                 <p className="text-sm text-stone-500">No hay usuarios inscriptos aún.</p>
               ) : (
                 <div className="space-y-3">
                   {currentParticipants.map((participant) => (
-                    <article key={participant.id} className="flex items-center justify-between rounded-2xl border border-stone-100 p-4">
+                    <article
+                      key={participant.id}
+                      className="flex items-center justify-between rounded-2xl border border-stone-100 p-4"
+                    >
                       <div>
-                        <p className="text-sm font-semibold text-stone-900">{participant.name}</p>
-                        <p className="text-xs text-stone-400">{participant.role}</p>
+                        <p className="text-sm font-semibold text-stone-900">
+                          {participant.usuarios?.nombre ?? participant.usuarios?.email}
+                        </p>
+                        <p className="text-xs text-stone-400">{participant.created_at}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Estado</p>
                         <p
                           className={`text-sm font-semibold ${
-                            participant.status === 'Confirmado'
+                            participant.estado === 'Confirmado'
                               ? 'text-emerald-600'
-                              : participant.status === 'Pendiente'
+                              : participant.estado === 'Pendiente'
                                 ? 'text-amber-600'
                                 : 'text-red-600'
                           }`}
                         >
-                          {participant.status}
+                          {participant.estado}
                         </p>
-                        <p className="text-xs text-stone-400">{participant.since} - inscripción</p>
+                        <p className="text-xs text-stone-400">{participant.usuarios?.email}</p>
                       </div>
                     </article>
                   ))}
@@ -655,7 +754,7 @@ const Capacitaciones: React.FC = () => {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setParticipantsSession(null)}
+                  onClick={closeParticipants}
                   className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
                 >
                   Cerrar
