@@ -15,6 +15,7 @@ import {
   fetchCapacitacionDetail,
   fetchCapacitacionParticipants,
   fetchCapacitacionPreguntas,
+  fetchCapacitacionResultados,
   fetchCapacitaciones,
   insertCapacitacionInscripciones,
   queueCapacitacionNotifications,
@@ -28,6 +29,9 @@ interface QuestionRow {
   id: string;
   question: string;
   answer: string;
+  tipo: 'texto' | 'multiple_single' | 'multiple_multi';
+  opciones: { id: string; label: string }[];
+  opciones_correctas: string[];
 }
 
 interface AttachmentInput {
@@ -75,6 +79,9 @@ const emptyQuestion = (): QuestionRow => ({
   id: `${Date.now()}-${Math.random()}`,
   question: '',
   answer: '',
+  tipo: 'texto',
+  opciones: [],
+  opciones_correctas: [],
 });
 
 const emptyAttachments = (): AttachmentInput[] =>
@@ -108,6 +115,20 @@ const Capacitaciones: React.FC = () => {
   const [detailSession, setDetailSession] = useState<CapacitacionSummary | null>(null);
   const [participantsSession, setParticipantsSession] = useState<CapacitacionSummary | null>(null);
   const [currentParticipants, setCurrentParticipants] = useState<ParticipantRecord[]>([]);
+  const [participantResults, setParticipantResults] = useState<Record<string, any>>({});
+  const [detailResults, setDetailResults] = useState<any[]>([]);
+  const [detailFilter, setDetailFilter] = useState<'all' | 'approved' | 'failed'>('all');
+  const filteredDetailResults = useMemo(() => {
+    if (detailFilter === 'approved') {
+      return detailResults.filter((result) => Boolean(result.aprobado));
+    }
+    if (detailFilter === 'failed') {
+      return detailResults.filter((result) => !result.aprobado);
+    }
+    return detailResults;
+  }, [detailFilter, detailResults]);
+  const [mailStatus, setMailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [mailError, setMailError] = useState('');
 
   const loadCapacitaciones = async () => {
     setIsListLoading(true);
@@ -161,8 +182,18 @@ const Capacitaciones: React.FC = () => {
   const allUsuariosSelected =
     usuariosCatalogo.length > 0 && selectedUsuarioIds.length === usuariosCatalogo.length;
 
+  const isQuestionValid = (question: QuestionRow) => {
+    if (!question.question.trim()) return false;
+    if (question.tipo === 'texto') {
+      return question.answer.trim().length > 0;
+    }
+    const opciones = question.opciones ?? [];
+    const validOptions = opciones.filter((option) => option.label.trim());
+    return validOptions.length >= 2 && (question.opciones_correctas?.length ?? 0) > 0;
+  };
+
   const canSave = useMemo(() => {
-    return title.trim().length > 0 && questions.every((q) => q.question.trim() && q.answer.trim());
+    return title.trim().length > 0 && questions.every(isQuestionValid);
   }, [title, questions]);
 
   const resetFormFields = () => {
@@ -217,8 +248,10 @@ const Capacitaciones: React.FC = () => {
   const triggerEmailDispatch = async () => {
     try {
       await supabase.functions.invoke('processEmailQueue');
-    } catch (dispatchError) {
+      return null;
+    } catch (dispatchError: any) {
       console.error('No se pudo procesar la cola de mails', dispatchError);
+      return dispatchError;
     }
   };
 
@@ -271,6 +304,9 @@ const Capacitaciones: React.FC = () => {
             id: question.id,
             question: question.pregunta,
             answer: question.respuesta,
+            tipo: question.tipo ?? 'texto',
+            opciones: question.opciones ?? [],
+            opciones_correctas: question.opciones_correctas ?? [],
           })),
         );
       } else {
@@ -305,10 +341,94 @@ const Capacitaciones: React.FC = () => {
     setQuestions((current) => current.filter((question) => question.id !== id));
   };
 
-  const updateQuestionField = (id: string, field: 'question' | 'answer', value: string) => {
+  const updateQuestionField = (
+    id: string,
+    field: 'question' | 'answer' | 'tipo',
+    value: string,
+  ) => {
     setQuestions((current) =>
-      current.map((question) => (question.id === id ? { ...question, [field]: value } : question)),
+      current.map((question) =>
+        question.id === id
+          ? {
+              ...question,
+              [field]: value,
+              ...(field === 'tipo' && value === 'texto'
+                ? { opciones: [], opciones_correctas: [] }
+                : {}),
+            }
+          : question,
+      ),
     );
+  };
+
+  const addOption = (questionId: string) => {
+    setQuestions((current) =>
+      current.map((question) =>
+        question.id === questionId
+          ? {
+              ...question,
+              opciones: [...question.opciones, { id: `${Date.now()}-${Math.random()}`, label: '' }],
+            }
+          : question,
+      ),
+    );
+  };
+
+  const updateOptionLabel = (questionId: string, optionId: string, label: string) => {
+    setQuestions((current) =>
+      current.map((question) =>
+        question.id === questionId
+          ? {
+              ...question,
+              opciones: question.opciones.map((option) =>
+                option.id === optionId ? { ...option, label } : option,
+              ),
+            }
+          : question,
+      ),
+    );
+  };
+
+  const removeOption = (questionId: string, optionId: string) => {
+    setQuestions((current) =>
+      current.map((question) =>
+        question.id === questionId
+          ? {
+              ...question,
+              opciones: question.opciones.filter((option) => option.id !== optionId),
+              opciones_correctas: question.opciones_correctas.filter((correct) => correct !== optionId),
+            }
+          : question,
+      ),
+    );
+  };
+
+  const toggleCorrectOption = (questionId: string, optionId: string) => {
+    setQuestions((current) =>
+      current.map((question) => {
+        if (question.id !== questionId) return question;
+        if (question.tipo === 'multiple_single') {
+          return { ...question, opciones_correctas: [optionId] };
+        }
+        const next = question.opciones_correctas.includes(optionId)
+          ? question.opciones_correctas.filter((correct) => correct !== optionId)
+          : [...question.opciones_correctas, optionId];
+        return { ...question, opciones_correctas: next };
+      }),
+    );
+  };
+
+  const notifyAssignedUsuarios = async (capacitacionId: string) => {
+    setMailStatus('sending');
+    setMailError('');
+    await assignAndNotifyUsuarios(capacitacionId);
+    const dispatchError = await triggerEmailDispatch();
+    if (dispatchError) {
+      setMailStatus('failed');
+      setMailError(dispatchError.message ?? 'Error enviando correos');
+      return;
+    }
+    setMailStatus('sent');
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -340,14 +460,22 @@ const Capacitaciones: React.FC = () => {
         const { data } = await createCapacitacion(payload);
         capacitacionId = data?.id ?? null;
       }
-      if (capacitacionId) {
-        await upsertCapacitacionPreguntas(
-          capacitacionId,
-          questions.map((question) => ({ question: question.question, answer: question.answer })),
+        if (capacitacionId) {
+          await upsertCapacitacionPreguntas(
+            capacitacionId,
+            questions.map((question) => ({
+              question: question.question,
+              answer: question.answer,
+            tipo: question.tipo,
+            opciones: question.opciones.map((option) => ({
+              id: option.id,
+              label: option.label,
+            })),
+            opciones_correctas: question.opciones_correctas,
+          })),
         );
-        if (!editingSession) {
-          await assignAndNotifyUsuarios(capacitacionId);
-          await triggerEmailDispatch();
+        if (capacitacionId) {
+          await notifyAssignedUsuarios(capacitacionId);
         }
       }
       resetFormFields();
@@ -370,6 +498,9 @@ const Capacitaciones: React.FC = () => {
   const viewDetails = async (session: CapacitacionSummary) => {
     const { data } = await fetchCapacitacionDetail(session.id);
     setDetailSession(data ?? session);
+    const { data: resultados } = await fetchCapacitacionResultados(session.id);
+    setDetailResults(resultados ?? []);
+    setDetailFilter('all');
   };
 
   const viewParticipants = async (session: CapacitacionSummary) => {
@@ -378,11 +509,21 @@ const Capacitaciones: React.FC = () => {
     const { data } = await fetchCapacitacionParticipants(session.id);
     setParticipantsLoading(false);
     setCurrentParticipants(data ?? []);
+
+    const { data: resultados } = await fetchCapacitacionResultados(session.id);
+    const scores: Record<string, any> = {};
+    (resultados ?? []).forEach((result) => {
+      if (result.usuario_id) {
+        scores[result.usuario_id] = result;
+      }
+    });
+    setParticipantResults(scores);
   };
 
   const closeParticipants = () => {
     setParticipantsSession(null);
     setCurrentParticipants([]);
+    setParticipantResults({});
   };
 
   return (
@@ -411,6 +552,15 @@ const Capacitaciones: React.FC = () => {
               Crear capacitación
             </button>
           </header>
+          {mailStatus !== 'idle' && (
+            <div className="px-6 py-3 text-sm flex items-center gap-2">
+              {mailStatus === 'sending' && <span className="text-amber-500">Enviando correos...</span>}
+              {mailStatus === 'sent' && <span className="text-emerald-600">Correos enviados</span>}
+              {mailStatus === 'failed' && (
+                <span className="text-rose-600">Error enviando correos: {mailError}</span>
+              )}
+            </div>
+          )}
 
           <section className="grid gap-4 md:grid-cols-3">
             {summaryCards.map((card) => {
@@ -732,6 +882,62 @@ const Capacitaciones: React.FC = () => {
                             placeholder="Describe los criterios que deben cumplirse"
                           />
                         </label>
+                        <label className="mt-3 block space-y-2 text-sm text-stone-600">
+                          Tipo de respuesta
+                          <select
+                            value={question.tipo}
+                            onChange={(event) => updateQuestionField(question.id, 'tipo', event.target.value)}
+                            className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                          >
+                            <option value="texto">Respuesta abierta</option>
+                            <option value="multiple_single">Multiple choice (una respuesta)</option>
+                            <option value="multiple_multi">Multiple choice (varias respuestas)</option>
+                          </select>
+                        </label>
+                        {(question.tipo === 'multiple_single' || question.tipo === 'multiple_multi') && (
+                          <div className="space-y-2 border border-stone-100 rounded-2xl p-3 bg-stone-50 mt-3">
+                            <p className="text-xs font-semibold text-stone-600">Opciones de respuesta</p>
+                            {(question.opciones ?? []).map((option) => {
+                              const isCorrect = (question.opciones_correctas ?? []).includes(option.id);
+                              return (
+                                <div key={option.id} className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={option.label}
+                                    onChange={(event) => updateOptionLabel(question.id, option.id, event.target.value)}
+                                    className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                                    placeholder="Texto de la opción"
+                                  />
+                                  <label className="inline-flex items-center gap-1 text-xs text-stone-500">
+                                    <input
+                                      type={question.tipo === 'multiple_multi' ? 'checkbox' : 'radio'}
+                                      checked={isCorrect}
+                                      name={`correct-${question.id}`}
+                                      onChange={() => toggleCorrectOption(question.id, option.id)}
+                                      className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    Correcta
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeOption(question.id, option.id)}
+                                    className="text-xs text-red-500 hover:text-red-600"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => addOption(question.id)}
+                              className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-400 px-3 py-1 text-xs text-amber-600 hover:border-amber-600"
+                            >
+                              <Plus size={12} />
+                              Agregar opción
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -771,10 +977,14 @@ const Capacitaciones: React.FC = () => {
                 <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Detalle</p>
                 <h3 className="text-lg font-semibold text-stone-900">{detailSession.titulo}</h3>
               </div>
-              <button
-                onClick={() => setDetailSession(null)}
-                className="text-stone-400 transition hover:text-stone-900"
-              >
+                <button
+                  onClick={() => {
+                    setDetailSession(null);
+                    setDetailResults([]);
+                    setDetailFilter('all');
+                  }}
+                  className="text-stone-400 transition hover:text-stone-900"
+                >
                 <X size={20} />
               </button>
             </div>
@@ -820,10 +1030,71 @@ const Capacitaciones: React.FC = () => {
                 <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducción</p>
                 <p className="mt-2 text-sm text-stone-700">{detailSession.introduccion}</p>
               </div>
+              {detailResults.length > 0 && (
+                <div className="rounded-3xl border border-stone-100 bg-slate-50 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-700">Resultados del examen</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{ value: 'all', label: 'Todos' }, { value: 'approved', label: 'Aprobados' }, { value: 'failed', label: 'Reprobados' }].map((filter) => (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() => setDetailFilter(filter.value as 'all' | 'approved' | 'failed')}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            detailFilter === filter.value
+                              ? 'border-amber-400 bg-amber-100 text-amber-700'
+                              : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300'
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {filteredDetailResults.length > 0 ? (
+                    <div className="grid gap-2">
+                      {filteredDetailResults.map((result) => (
+                        <div
+                          key={`${result.usuario_id}-${result.score}-${result.total_questions}`}
+                          className="flex items-center justify-between bg-white rounded-2xl border border-stone-200 p-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-stone-900">
+                              {result.usuarios?.nombre ?? 'Usuario'}
+                            </p>
+                            <p className="text-xs text-slate-500">{result.usuarios?.email}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-slate-900">
+                              {Math.round((Number(result.score) || 0) * 100)}%
+                            </p>
+                            <p
+                              className={`text-xs font-semibold ${
+                                result.aprobado ? 'text-emerald-600' : 'text-rose-600'
+                              }`}
+                            >
+                              {result.aprobado ? 'Aprobado' : 'Reprobado'}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {result.correct_answers}/{result.total_questions} correctas
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-500">No hay resultados que coincidan con este filtro.</p>
+                  )}
+                </div>
+              )}
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setDetailSession(null)}
+                  onClick={() => {
+                    setDetailSession(null);
+                    setDetailResults([]);
+                    setDetailFilter('all');
+                  }}
                   className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
                 >
                   Cerrar
@@ -881,6 +1152,20 @@ const Capacitaciones: React.FC = () => {
                           {participant.estado}
                         </p>
                         <p className="text-xs text-stone-400">{participant.usuarios?.email}</p>
+                        {participant.usuarios?.id && participantResults[participant.usuarios.id] && (
+                          <div className="text-right mt-2 space-y-1">
+                            <p className="text-xs text-stone-400">
+                              Puntaje: {Math.round((participantResults[participant.usuarios.id].score ?? 0) * 100)}%
+                            </p>
+                            <p
+                              className={`text-xs font-semibold ${
+                                participantResults[participant.usuarios.id].aprobado ? 'text-emerald-600' : 'text-rose-600'
+                              }`}
+                            >
+                              {participantResults[participant.usuarios.id].aprobado ? 'Aprobó' : 'Reprobó'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </article>
                   ))}
@@ -904,3 +1189,4 @@ const Capacitaciones: React.FC = () => {
 };
 
 export default Capacitaciones;
+

@@ -10,6 +10,14 @@ interface QuestionRow {
   id: string;
   question: string;
   answer: string;
+  tipo: 'texto' | 'multiple_single' | 'multiple_multi';
+  opciones: { id: string; label: string }[];
+  opciones_correctas: string[];
+}
+
+interface AnswerValue {
+  text?: string;
+  selectedOptions?: string[];
 }
 
 interface CapacitacionSummary {
@@ -30,7 +38,7 @@ interface CapacitacionSummary {
 const CapacitacionExam: React.FC = () => {
   const [capacitacion, setCapacitacion] = useState<CapacitacionSummary | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -95,6 +103,9 @@ const CapacitacionExam: React.FC = () => {
             id: question.id,
             question: question.pregunta,
             answer: question.respuesta,
+            tipo: question.tipo ?? 'texto',
+            opciones: question.opciones ?? [],
+            opciones_correctas: question.opciones_correctas ?? [],
           })),
         );
       }
@@ -108,16 +119,51 @@ const CapacitacionExam: React.FC = () => {
     setAnswers((prev) => {
       const next = { ...prev };
       questions.forEach((question) => {
-        if (!(question.id in next)) {
-          next[question.id] = '';
-        }
+        const existing = next[question.id] ?? {};
+        next[question.id] = {
+          ...existing,
+          text: existing.text ?? '',
+          selectedOptions: existing.selectedOptions ?? [],
+        };
       });
       return next;
     });
   }, [questions]);
 
-  const handleAnswerChange = (questionId: string, value: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
+  const handleTextAnswerChange = (questionId: string, value: string) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        text: value,
+      },
+    }));
+  };
+
+  const handleSingleChoice = (questionId: string, optionId: string) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        selectedOptions: [optionId],
+      },
+    }));
+  };
+
+  const handleMultiChoiceToggle = (questionId: string, optionId: string) => {
+    setAnswers((prev) => {
+      const current = prev[questionId]?.selectedOptions ?? [];
+      const nextSelection = current.includes(optionId)
+        ? current.filter((id) => id !== optionId)
+        : [...current, optionId];
+      return {
+        ...prev,
+        [questionId]: {
+          ...prev[questionId],
+          selectedOptions: nextSelection,
+        },
+      };
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -133,11 +179,26 @@ const CapacitacionExam: React.FC = () => {
       return;
     }
 
-    const payload = questions.map((question) => ({
-      pregunta_id: question.id,
-      usuario_id: sessionData.session.user.id,
-      respuesta: answers[question.id] ?? '',
-    }));
+    const payload = questions.map((question) => {
+      const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
+      const selected = answerState.selectedOptions ?? [];
+      const normalizedSelection = [...selected].sort();
+      const responseLabel = normalizedSelection
+        .map(
+          (optionId) =>
+            question.opciones.find((option) => option.id === optionId)?.label ?? optionId,
+        )
+        .join(', ');
+      const respuestaJson = normalizedSelection.length > 0 ? JSON.stringify(normalizedSelection) : null;
+      const respuestaText =
+        question.tipo === 'texto' ? answerState.text ?? '' : responseLabel;
+      return {
+        pregunta_id: question.id,
+        usuario_id: sessionData.session.user.id,
+        respuesta: respuestaText,
+        respuesta_json: respuestaJson,
+      };
+    });
 
     const { error: submitError } = await submitCapacitacionRespuestas(payload);
     if (submitError) {
@@ -253,22 +314,59 @@ const CapacitacionExam: React.FC = () => {
 
             {loggedIn && (
               <form onSubmit={handleSubmit} className="space-y-5">
-                {questions.map((question, index) => (
-                  <div key={question.id} className="bg-white rounded-3xl border border-slate-100 p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">Pregunta {index + 1}</p>
+                {questions.map((question, index) => {
+                  const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
+                  const selectedOptions = answerState.selectedOptions ?? [];
+                  const opciones = question.opciones ?? [];
+                  return (
+                    <div key={question.id} className="bg-white rounded-3xl border border-slate-100 p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Pregunta {index + 1}</p>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-3">{question.question}</p>
+                      {question.tipo === 'texto' && (
+                        <textarea
+                          value={answerState.text ?? ''}
+                          onChange={(event) => handleTextAnswerChange(question.id, event.target.value)}
+                          rows={4}
+                          className="w-full rounded-2xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          placeholder="Escribí tu respuesta..."
+                          required
+                        />
+                      )}
+                      {(question.tipo === 'multiple_single' || question.tipo === 'multiple_multi') && (
+                        <div className="space-y-2">
+                          {opciones.length === 0 && (
+                            <p className="text-xs text-stone-400">Esta pregunta no tiene opciones configuradas.</p>
+                          )}
+                          {opciones.map((option) => (
+                            <label
+                              key={option.id}
+                              className="flex cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 px-3 py-2 text-sm text-stone-600 transition hover:border-amber-300"
+                            >
+                              <input
+                                type={question.tipo === 'multiple_multi' ? 'checkbox' : 'radio'}
+                                name={`question-${question.id}`}
+                                checked={
+                                  question.tipo === 'multiple_multi'
+                                    ? selectedOptions.includes(option.id)
+                                    : selectedOptions[0] === option.id
+                                }
+                                onChange={() =>
+                                  question.tipo === 'multiple_multi'
+                                    ? handleMultiChoiceToggle(question.id, option.id)
+                                    : handleSingleChoice(question.id, option.id)
+                                }
+                                className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-600 mb-3">{question.question}</p>
-                    <textarea
-                      value={answers[question.id] ?? ''}
-                      onChange={(event) => handleAnswerChange(question.id, event.target.value)}
-                      rows={4}
-                      className="w-full rounded-2xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
-                      placeholder="Escribí tu respuesta..."
-                      required
-                    />
-                  </div>
-                ))}
+                  );
+                })}
                 {message && <p className="text-sm text-emerald-600">{message}</p>}
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <button
@@ -294,3 +392,4 @@ const CapacitacionExam: React.FC = () => {
 };
 
 export default CapacitacionExam;
+

@@ -25,11 +25,44 @@ CREATE TABLE public.capacitaciones_preguntas (
   capacitacion_id uuid NOT NULL,
   orden integer NOT NULL,
   pregunta text NOT NULL,
-  respuesta text NOT NULL,
+  respuesta text,
+  tipo character varying NOT NULL DEFAULT 'texto' CHECK (tipo IN ('texto', 'multiple_single', 'multiple_multi')),
+  opciones jsonb NOT NULL DEFAULT '[]'::jsonb,
+  opciones_correctas jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT capacitaciones_preguntas_pkey PRIMARY KEY (id),
   CONSTRAINT capacitaciones_preguntas_capacitacion_id_fkey FOREIGN KEY (capacitacion_id) REFERENCES public.capacitaciones(id) ON DELETE CASCADE
 );
+
+ALTER TABLE public.capacitaciones_preguntas
+  ADD COLUMN IF NOT EXISTS tipo character varying NOT NULL DEFAULT 'texto';
+
+DO $$
+BEGIN
+  ALTER TABLE public.capacitaciones_preguntas
+    ADD COLUMN IF NOT EXISTS opciones jsonb NOT NULL DEFAULT '[]'::jsonb;
+EXCEPTION WHEN duplicate_column THEN
+  NULL;
+END;
+$$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.capacitaciones_preguntas
+    ADD COLUMN IF NOT EXISTS opciones_correctas jsonb NOT NULL DEFAULT '[]'::jsonb;
+EXCEPTION WHEN duplicate_column THEN
+  NULL;
+END;
+$$;
+
+DO $$
+BEGIN
+  ALTER TABLE public.capacitaciones_respuestas
+    ADD COLUMN IF NOT EXISTS respuesta_json jsonb;
+EXCEPTION WHEN duplicate_column THEN
+  NULL;
+END;
+$$;
 
 CREATE TABLE public.capacitaciones_inscripciones (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -94,6 +127,7 @@ CREATE TABLE IF NOT EXISTS public.capacitaciones_respuestas (
   pregunta_id uuid NOT NULL,
   usuario_id uuid NOT NULL,
   respuesta text,
+  respuesta_json jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT capacitaciones_respuestas_pkey PRIMARY KEY (id),
@@ -103,6 +137,39 @@ CREATE TABLE IF NOT EXISTS public.capacitaciones_respuestas (
 
 CREATE UNIQUE INDEX IF NOT EXISTS capacitaciones_respuestas_unique
 ON public.capacitaciones_respuestas (pregunta_id, usuario_id);
+
+CREATE VIEW public.capacitaciones_resultados AS
+SELECT
+  r.usuario_id,
+  q.capacitacion_id,
+  COUNT(*) AS total_questions,
+  SUM(
+    CASE
+      WHEN q.tipo = 'texto' THEN (r.respuesta = q.respuesta)::int
+      WHEN q.tipo IN ('multiple_single','multiple_multi') THEN
+        (r.respuesta_json::text = q.opciones_correctas::text)::int
+      ELSE 0
+    END
+  ) AS correct_answers,
+  SUM(
+    CASE
+      WHEN q.tipo = 'texto' THEN (r.respuesta = q.respuesta)::int
+      WHEN q.tipo IN ('multiple_single','multiple_multi') THEN
+        (r.respuesta_json::text = q.opciones_correctas::text)::int
+      ELSE 0
+    END
+  )::numeric / NULLIF(COUNT(*), 0) AS score,
+  (SUM(
+    CASE
+      WHEN q.tipo = 'texto' THEN (r.respuesta = q.respuesta)::int
+      WHEN q.tipo IN ('multiple_single','multiple_multi') THEN
+        (r.respuesta_json::text = q.opciones_correctas::text)::int
+      ELSE 0
+    END
+  )::numeric / NULLIF(COUNT(*), 0)) >= 0.7 AS aprobado
+FROM public.capacitaciones_respuestas r
+JOIN public.capacitaciones_preguntas q ON q.id = r.pregunta_id
+GROUP BY r.usuario_id, q.capacitacion_id;
 
 -- Ensure the capacitaciones module exists for granting access via the UI
 INSERT INTO public.modulos (code, nombre, descripcion, activo)

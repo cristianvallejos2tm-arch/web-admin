@@ -474,9 +474,17 @@ export async function fetchCapacitacionParticipants(capacitacionId: string) {
 export async function fetchCapacitacionPreguntas(capacitacionId: string) {
     return supabase
         .from('capacitaciones_preguntas')
-        .select('id, pregunta, respuesta, orden')
+        .select('id, pregunta, respuesta, orden, tipo, opciones, opciones_correctas')
         .eq('capacitacion_id', capacitacionId)
         .order('orden', { ascending: true });
+}
+
+export async function fetchCapacitacionResultados(capacitacionId: string) {
+    return supabase
+        .from('capacitaciones_resultados')
+        .select('usuario_id, total_questions, correct_answers, score, aprobado, usuarios(id, nombre, email)')
+        .eq('capacitacion_id', capacitacionId)
+        .order('score', { ascending: false });
 }
 
 export async function createCapacitacion(payload: {
@@ -530,12 +538,20 @@ export async function upsertCapacitacionPreguntas(
             orden: index,
             pregunta: pregunta.question,
             respuesta: pregunta.answer,
+            tipo: pregunta.tipo || 'texto',
+            opciones: pregunta.opciones ? pregunta.opciones : [],
+            opciones_correctas: pregunta.opciones_correctas ? pregunta.opciones_correctas : [],
         })),
     );
 }
 
 export async function submitCapacitacionRespuestas(
-    responses: Array<{ pregunta_id: string; usuario_id: string; respuesta: string }>,
+    responses: Array<{
+        pregunta_id: string;
+        usuario_id: string;
+        respuesta?: string;
+        respuesta_json?: string | null;
+    }>,
 ) {
     if (responses.length === 0) {
         return { data: [], error: null };
