@@ -460,7 +460,11 @@ export async function fetchCapacitaciones() {
 }
 
 export async function fetchCapacitacionDetail(id: string) {
-    return supabase.from('capacitaciones').select('*').eq('id', id).single();
+    return supabase
+        .from('capacitaciones')
+        .select('*, creador:created_by (id, nombre, email)')
+        .eq('id', id)
+        .single();
 }
 
 export async function fetchCapacitacionParticipants(capacitacionId: string) {
@@ -479,12 +483,30 @@ export async function fetchCapacitacionPreguntas(capacitacionId: string) {
         .order('orden', { ascending: true });
 }
 
+export async function fetchCapacitacionIntentos(capacitacionId: string, usuarioId: string) {
+    return supabase
+        .from('capacitaciones_intentos')
+        .select('*')
+        .eq('capacitacion_id', capacitacionId)
+        .eq('usuario_id', usuarioId)
+        .order('intento', { ascending: true });
+}
+
 export async function fetchCapacitacionResultados(capacitacionId: string) {
     return supabase
         .from('capacitaciones_resultados')
         .select('usuario_id, total_questions, correct_answers, score, aprobado, usuarios(id, nombre, email)')
         .eq('capacitacion_id', capacitacionId)
         .order('score', { ascending: false });
+}
+
+export async function fetchCapacitacionUsuarioRespuestas(capacitacionId: string, usuarioId: string) {
+    return supabase
+        .from('capacitaciones_preguntas')
+        .select('id, pregunta, tipo, opciones, capacitaciones_respuestas(respuesta, respuesta_json, created_at)')
+        .eq('capacitacion_id', capacitacionId)
+        .eq('capacitaciones_respuestas.usuario_id', usuarioId)
+        .order('orden', { ascending: true });
 }
 
 export async function createCapacitacion(payload: {
@@ -573,6 +595,16 @@ export async function insertCapacitacionInscripciones(capacitacionId: string, us
                 usuario_id: usuarioId,
             })),
         );
+}
+
+export async function createCapacitacionIntento(payload: {
+    capacitacion_id: string;
+    usuario_id: string;
+    intento: number;
+    score: number;
+    aprobado: boolean;
+}) {
+    return supabase.from('capacitaciones_intentos').insert([payload]);
 }
 
 export async function queueCapacitacionNotifications(

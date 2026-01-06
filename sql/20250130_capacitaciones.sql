@@ -138,6 +138,20 @@ CREATE TABLE IF NOT EXISTS public.capacitaciones_respuestas (
 CREATE UNIQUE INDEX IF NOT EXISTS capacitaciones_respuestas_unique
 ON public.capacitaciones_respuestas (pregunta_id, usuario_id);
 
+CREATE TABLE public.capacitaciones_intentos (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  capacitacion_id uuid NOT NULL,
+  usuario_id uuid NOT NULL,
+  intento integer NOT NULL,
+  score numeric NOT NULL DEFAULT 0,
+  aprobado boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT capacitaciones_intentos_pkey PRIMARY KEY (id),
+  CONSTRAINT capacitaciones_intentos_capacitacion_id_fkey FOREIGN KEY (capacitacion_id) REFERENCES public.capacitaciones(id) ON DELETE CASCADE,
+  CONSTRAINT capacitaciones_intentos_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id) ON DELETE CASCADE,
+  CONSTRAINT capacitaciones_intentos_unique UNIQUE (capacitacion_id, usuario_id, intento)
+);
+
 CREATE VIEW public.capacitaciones_resultados AS
 SELECT
   r.usuario_id,

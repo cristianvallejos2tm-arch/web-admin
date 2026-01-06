@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8080,
       host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: 'http://localhost:4000',
+          changeOrigin: true,
+        },
+      },
     }, preview: {
       allowedHosts: ['web-admin-duo2.onrender.com'],
     },

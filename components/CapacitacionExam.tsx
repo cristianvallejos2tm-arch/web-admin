@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   supabase,
   fetchCapacitacionDetail,
+  fetchCapacitacionIntentos,
   fetchCapacitacionPreguntas,
   submitCapacitacionRespuestas,
+  createCapacitacionIntento,
+  queueCapacitacionNotifications,
 } from '../services/supabase';
 
 interface QuestionRow {
@@ -29,10 +32,14 @@ interface CapacitacionSummary {
   instructor?: string;
   ubicacion?: string;
   fecha?: string;
-  estado?: string;
-  capacidad?: number;
-  inscriptos?: number;
-  cuestionario_nombre?: string;
+}
+
+interface AttemptRecord {
+  id: string;
+  intento: number;
+  score: number;
+  aprobado: boolean;
+  created_at?: string;
 }
 
 const CapacitacionExam: React.FC = () => {
@@ -47,10 +54,16 @@ const CapacitacionExam: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [userSession, setUserSession] = useState<any>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [attemptHistory, setAttemptHistory] = useState<AttemptRecord[]>([]);
+  const [hasPassedPreviousAttempt, setHasPassedPreviousAttempt] = useState(false);
+  const [popNotification, setPopNotification] = useState<
+    | { type: 'success' | 'warning' | 'error'; message: string }
+    | null
+  >(null);
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '';
   const capacitacionId = path.split('/')[2] ?? '';
-
   const portalUrl = useMemo(() => {
     if (typeof window === 'undefined') {
       return '/capacitaciones';
@@ -58,36 +71,56 @@ const CapacitacionExam: React.FC = () => {
     return `${window.location.origin}/capacitaciones`;
   }, []);
 
+  const remainingAttempts = Math.max(0, 3 - attempts);
+  const currentUserId = userSession?.user?.id ?? null;
+
   useEffect(() => {
     const initSession = async () => {
       const { data } = await supabase.auth.getSession();
       setUserSession(data?.session ?? null);
     };
+
     initSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserSession(session);
+      setUserSession(session ?? null);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!capacitacionId) {
-      setError('Enlace de capacitación inválido');
-      setLoading(false);
+  const loadAttempts = useCallback(async () => {
+    if (!capacitacionId || !currentUserId) {
+      setAttemptHistory([]);
+      setAttempts(0);
+      setHasPassedPreviousAttempt(false);
       return;
     }
+    const { data } = await fetchCapacitacionIntentos(capacitacionId, currentUserId);
+    if (data) {
+      setAttemptHistory(data);
+      setAttempts(data.length);
+      setHasPassedPreviousAttempt(data.some((attempt) => attempt.aprobado));
+    } else {
+      setAttemptHistory([]);
+      setAttempts(0);
+      setHasPassedPreviousAttempt(false);
+    }
+  }, [capacitacionId, currentUserId]);
 
+  useEffect(() => {
+    loadAttempts();
+  }, [loadAttempts]);
+
+  useEffect(() => {
+    if (!capacitacionId) return;
     const loadData = async () => {
       setLoading(true);
       const { data: detail, error: detailError } = await fetchCapacitacionDetail(capacitacionId);
       if (detailError) {
-        setError('No se pudo cargar la capacitación');
+        setError('No se pudo cargar la capacitación.');
         setLoading(false);
         return;
       }
@@ -95,7 +128,7 @@ const CapacitacionExam: React.FC = () => {
 
       const { data: questionData, error: questionError } = await fetchCapacitacionPreguntas(capacitacionId);
       if (questionError) {
-        setError('No se pudieron cargar las preguntas de la capacitación');
+        setError('No se pudieron cargar las preguntas de la capacitación.');
         setQuestions([]);
       } else {
         setQuestions(
@@ -111,7 +144,6 @@ const CapacitacionExam: React.FC = () => {
       }
       setLoading(false);
     };
-
     loadData();
   }, [capacitacionId]);
 
@@ -129,6 +161,12 @@ const CapacitacionExam: React.FC = () => {
       return next;
     });
   }, [questions]);
+
+  useEffect(() => {
+    if (!popNotification) return undefined;
+    const timeout = setTimeout(() => setPopNotification(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [popNotification]);
 
   const handleTextAnswerChange = (questionId: string, value: string) => {
     setAnswers((prev) => ({
@@ -166,6 +204,26 @@ const CapacitacionExam: React.FC = () => {
     });
   };
 
+  const recordAttempt = async (attemptNumber: number, score: number, aprobado: boolean) => {
+    if (!capacitacionId || !currentUserId) return;
+    await createCapacitacionIntento({
+      capacitacion_id: capacitacionId,
+      usuario_id: currentUserId,
+      intento: attemptNumber,
+      score,
+      aprobado,
+    });
+    await loadAttempts();
+  };
+
+  const triggerEmailDispatch = async () => {
+    try {
+      await supabase.functions.invoke('processEmailQueue');
+    } catch (dispatchError) {
+      console.error('No se pudo procesar la cola de correos tras aprobar', dispatchError);
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -179,10 +237,29 @@ const CapacitacionExam: React.FC = () => {
       return;
     }
 
-    const payload = questions.map((question) => {
+    if (hasPassedPreviousAttempt) {
+      setPopNotification({
+        type: 'success',
+        message: 'Ya habías aprobado esta capacitación.',
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    if (attempts >= 3) {
+      setPopNotification({
+        type: 'error',
+        message: 'Has agotado los 3 intentos disponibles.',
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    const entries = questions.map((question) => {
       const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
       const selected = answerState.selectedOptions ?? [];
       const normalizedSelection = [...selected].sort();
+      const expectedSelection = [...(question.opciones_correctas ?? [])].sort();
       const responseLabel = normalizedSelection
         .map(
           (optionId) =>
@@ -190,22 +267,81 @@ const CapacitacionExam: React.FC = () => {
         )
         .join(', ');
       const respuestaJson = normalizedSelection.length > 0 ? JSON.stringify(normalizedSelection) : null;
-      const respuestaText =
-        question.tipo === 'texto' ? answerState.text ?? '' : responseLabel;
+      const respuestaText = question.tipo === 'texto' ? answerState.text ?? '' : responseLabel;
+      const correct =
+        question.tipo === 'texto'
+          ? (answerState.text ?? '').trim().toLowerCase() === (question.answer ?? '').trim().toLowerCase()
+          : JSON.stringify(normalizedSelection) === JSON.stringify(expectedSelection);
       return {
         pregunta_id: question.id,
         usuario_id: sessionData.session.user.id,
         respuesta: respuestaText,
         respuesta_json: respuestaJson,
+        correct,
       };
     });
 
+    const totalQuestions = questions.length;
+    const correctCount = entries.filter((entry) => entry.correct).length;
+    const score = totalQuestions > 0 ? correctCount / totalQuestions : 0;
+    const passed = totalQuestions === 0 ? true : score >= 0.7;
+    const payload = entries.map(({ correct, ...rest }) => rest);
+
     const { error: submitError } = await submitCapacitacionRespuestas(payload);
     if (submitError) {
-      setError('Hubo un error al guardar tus respuestas. Intentá de nuevo más tarde.');
-    } else {
-      setMessage('Tus respuestas fueron guardadas correctamente.');
+      setError('Hubo un error al guardar tus respuestas. Inténtalo de nuevo más tarde.');
+      setSubmitting(false);
+      return;
     }
+
+    const attemptNumber = attempts + 1;
+    await recordAttempt(attemptNumber, score, passed);
+
+      if (passed) {
+        setPopNotification({
+          type: 'success',
+          message: '¡Aprobaste la capacitación! 🎉',
+        });
+        const userEmail = sessionData.session.user.email;
+        if (userEmail) {
+          const portalUrl = `${window.location.origin}/capacitaciones/${capacitacionId}`;
+          const courseTitle = capacitacion?.titulo ?? 'la capacitación';
+          const bodySections = [
+            `<p>Hola ${sessionData.session.user.email},</p>`,
+            `<p>Felicitaciones por aprobar <strong>${courseTitle}</strong>.</p>`,
+            capacitacion?.introduccion ? `<p>${capacitacion.introduccion}</p>` : '',
+            capacitacion?.descripcion ? `<p>${capacitacion.descripcion}</p>` : '',
+            `<p>Podés repasar el contenido desde el portal: <a href="${portalUrl}">${portalUrl}</a></p>`,
+            '<p>Saludos,<br/>Equipo CAM</p>',
+          ].filter(Boolean);
+          const notificationEntry = {
+            to_email: userEmail,
+            subject: `Aprobaste ${courseTitle}`,
+            body: bodySections.join(''),
+          };
+          const { error: notificationError } = await queueCapacitacionNotifications([notificationEntry]);
+          if (notificationError) {
+            console.error('Error al notificar aprobación', notificationError);
+          } else {
+            await triggerEmailDispatch();
+          }
+        }
+      } else {
+        const triesLeft = Math.max(0, 3 - attemptNumber);
+        setPopNotification({
+          type: attemptNumber >= 3 ? 'error' : 'warning',
+          message:
+          attemptNumber >= 3
+            ? 'Desaprobaste la capacitación y agotaste los intentos.'
+            : `Desaprobaste la capacitación. Te quedan ${triesLeft} intento${triesLeft === 1 ? '' : 's'}.`,
+      });
+    }
+
+      setMessage(
+        passed
+          ? 'Tus respuestas fueron guardadas correctamente. Te enviamos el resumen por correo.'
+          : 'Tus respuestas fueron guardadas correctamente.',
+      );
     setSubmitting(false);
   };
 
@@ -250,13 +386,13 @@ const CapacitacionExam: React.FC = () => {
             {capacitacion?.tipo && (
               <article className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
                 <p className="text-xs uppercase text-slate-400">Tipo</p>
-                <p className="text-sm font-semibold text-slate-900">{capacitacion.tipo}</p>
+                <p className="text-sm font-semibold text-stone-900">{capacitacion.tipo}</p>
               </article>
             )}
             {capacitacion?.instructor && (
               <article className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
                 <p className="text-xs uppercase text-slate-400">Instructor</p>
-                <p className="text-sm font-semibold text-slate-900">{capacitacion.instructor}</p>
+                <p className="text-sm font-semibold text-stone-900">{capacitacion.instructor}</p>
               </article>
             )}
             {capacitacion?.fecha && (
@@ -270,6 +406,20 @@ const CapacitacionExam: React.FC = () => {
           </div>
         </div>
 
+        {popNotification && (
+          <div
+            className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+              popNotification.type === 'success'
+                ? 'bg-emerald-50 text-emerald-700'
+                : popNotification.type === 'warning'
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-rose-50 text-rose-700'
+            }`}
+          >
+            {popNotification.message}
+          </div>
+        )}
+
         {loading ? (
           <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
             Cargando preguntas del examen...
@@ -277,7 +427,7 @@ const CapacitacionExam: React.FC = () => {
         ) : (
           <>
             {!loggedIn && (
-              <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
+              <div className="bg-white rounded-3xl border border-stone-200 p-5 space-y-3">
                 <p className="text-sm text-slate-500">Iniciá sesión para registrar tus respuestas.</p>
                 <form onSubmit={handleLogin} className="space-y-3">
                   <div>
@@ -313,70 +463,82 @@ const CapacitacionExam: React.FC = () => {
             )}
 
             {loggedIn && (
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {questions.map((question, index) => {
-                  const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
-                  const selectedOptions = answerState.selectedOptions ?? [];
-                  const opciones = question.opciones ?? [];
-                  return (
-                    <div key={question.id} className="bg-white rounded-3xl border border-slate-100 p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">Pregunta {index + 1}</p>
-                      </div>
-                      <p className="text-sm text-slate-600 mb-3">{question.question}</p>
-                      {question.tipo === 'texto' && (
-                        <textarea
-                          value={answerState.text ?? ''}
-                          onChange={(event) => handleTextAnswerChange(question.id, event.target.value)}
-                          rows={4}
-                          className="w-full rounded-2xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
-                          placeholder="Escribí tu respuesta..."
-                          required
-                        />
-                      )}
-                      {(question.tipo === 'multiple_single' || question.tipo === 'multiple_multi') && (
-                        <div className="space-y-2">
-                          {opciones.length === 0 && (
-                            <p className="text-xs text-stone-400">Esta pregunta no tiene opciones configuradas.</p>
-                          )}
-                          {opciones.map((option) => (
-                            <label
-                              key={option.id}
-                              className="flex cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 px-3 py-2 text-sm text-stone-600 transition hover:border-amber-300"
-                            >
-                              <input
-                                type={question.tipo === 'multiple_multi' ? 'checkbox' : 'radio'}
-                                name={`question-${question.id}`}
-                                checked={
-                                  question.tipo === 'multiple_multi'
-                                    ? selectedOptions.includes(option.id)
-                                    : selectedOptions[0] === option.id
-                                }
-                                onChange={() =>
-                                  question.tipo === 'multiple_multi'
-                                    ? handleMultiChoiceToggle(question.id, option.id)
-                                    : handleSingleChoice(question.id, option.id)
-                                }
-                                className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
+              <>
+                {attemptHistory.length > 0 && (
+                  <p className="text-xs text-stone-500">
+                    Intentos usados: {attempts}/3{' '}
+                    {hasPassedPreviousAttempt
+                      ? '(aprobaste)'
+                      : attempts >= 3
+                        ? '(intentos agotados)'
+                        : `(disponibles: ${remainingAttempts})`}
+                  </p>
+                )}
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  {questions.map((question, index) => {
+                    const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
+                    const selectedOptions = answerState.selectedOptions ?? [];
+                    const opciones = question.opciones ?? [];
+                    return (
+                      <div key={question.id} className="bg-white rounded-3xl border border-slate-100 p-4 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">Pregunta {index + 1}</p>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {message && <p className="text-sm text-emerald-600">{message}</p>}
-                {error && <p className="text-sm text-red-600">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={submitting || questions.length === 0}
-                  className="w-full rounded-2xl bg-amber-500 text-white py-2 text-sm font-semibold hover:bg-amber-600 transition disabled:opacity-50"
-                >
-                  {submitting ? 'Guardando respuestas...' : 'Enviar respuestas'}
-                </button>
-              </form>
+                        <p className="text-sm text-slate-600 mb-3">{question.question}</p>
+                        {question.tipo === 'texto' && (
+                          <textarea
+                            value={answerState.text ?? ''}
+                            onChange={(event) => handleTextAnswerChange(question.id, event.target.value)}
+                            rows={4}
+                            className="w-full rounded-2xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="Escribí tu respuesta..."
+                            required
+                          />
+                        )}
+                        {(question.tipo === 'multiple_single' || question.tipo === 'multiple_multi') && (
+                          <div className="space-y-2">
+                            {opciones.length === 0 && (
+                              <p className="text-xs text-stone-400">Esta pregunta no tiene opciones configuradas.</p>
+                            )}
+                            {opciones.map((option) => (
+                              <label
+                                key={option.id}
+                                className="flex cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 px-3 py-2 text-sm text-stone-600 transition hover:border-amber-300"
+                              >
+                                <input
+                                  type={question.tipo === 'multiple_multi' ? 'checkbox' : 'radio'}
+                                  name={`question-${question.id}`}
+                                  checked={
+                                    question.tipo === 'multiple_multi'
+                                      ? selectedOptions.includes(option.id)
+                                      : selectedOptions.length > 0 && selectedOptions[0] === option.id
+                                  }
+                                  onChange={() =>
+                                    question.tipo === 'multiple_multi'
+                                      ? handleMultiChoiceToggle(question.id, option.id)
+                                      : handleSingleChoice(question.id, option.id)
+                                  }
+                                  className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
+                                />
+                                <span>{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {message && <p className="text-sm text-emerald-600">{message}</p>}
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={submitting || questions.length === 0}
+                    className="w-full rounded-2xl bg-amber-500 text-white py-2 text-sm font-semibold hover:bg-amber-600 transition disabled:opacity-50"
+                  >
+                    {submitting ? 'Guardando respuestas...' : 'Enviar respuestas'}
+                  </button>
+                </form>
+              </>
             )}
           </>
         )}
@@ -392,4 +554,3 @@ const CapacitacionExam: React.FC = () => {
 };
 
 export default CapacitacionExam;
-

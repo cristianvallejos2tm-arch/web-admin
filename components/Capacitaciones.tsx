@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   BookOpenCheck,
   CalendarDays,
@@ -10,6 +10,9 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import EvaluacionTemplate, { EvaluacionQA, EvaluacionTemplateProps } from './EvaluacionTemplate';
 import {
   createCapacitacion,
   fetchCapacitacionDetail,
@@ -21,6 +24,7 @@ import {
   queueCapacitacionNotifications,
   updateCapacitacion,
   upsertCapacitacionPreguntas,
+  fetchCapacitacionUsuarioRespuestas,
   fetchUsuariosLite,
   supabase,
 } from '../services/supabase';
@@ -118,15 +122,169 @@ const Capacitaciones: React.FC = () => {
   const [participantResults, setParticipantResults] = useState<Record<string, any>>({});
   const [detailResults, setDetailResults] = useState<any[]>([]);
   const [detailFilter, setDetailFilter] = useState<'all' | 'approved' | 'failed'>('all');
+  const [renderTemplateProps, setRenderTemplateProps] = useState<EvaluacionTemplateProps | null>(null);
+  const templateRef = useRef<HTMLDivElement>(null);
+  const sanitizeSlug = (text: string) =>
+    text
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  const normalizeResultEntry = useCallback((result: any) => {
+    const scoreValue = Number(result?.score ?? 0);
+    const scoreNormalized = scoreValue > 1 ? scoreValue / 100 : scoreValue;
+    const approvedFromFlag = [true, 't', 'true', '1', 1].includes(result?.aprobado);
+    const aprobado = approvedFromFlag || scoreNormalized >= 0.7;
+    return {
+      ...result,
+      aprobado,
+      score: scoreNormalized,
+    };
+  }, []);
+
+  const normalizedDetailResults = useMemo(
+    () => detailResults.map((result) => normalizeResultEntry(result)),
+    [detailResults, normalizeResultEntry],
+  );
+
   const filteredDetailResults = useMemo(() => {
     if (detailFilter === 'approved') {
-      return detailResults.filter((result) => Boolean(result.aprobado));
+      return normalizedDetailResults.filter((result) => Boolean(result.aprobado));
     }
     if (detailFilter === 'failed') {
-      return detailResults.filter((result) => !result.aprobado);
+      return normalizedDetailResults.filter((result) => !result.aprobado);
     }
-    return detailResults;
-  }, [detailFilter, detailResults]);
+    return normalizedDetailResults;
+  }, [detailFilter, normalizedDetailResults]);
+  const captureTemplatePdf = useCallback(async (fileName: string) => {
+    if (!templateRef.current) return;
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const canvas = await html2canvas(templateRef.current, {
+      scale: 2,
+      backgroundColor: '#fff',
+      useCORS: true,
+    });
+    const pdf = new jsPDF({
+      unit: 'pt',
+      format: [canvas.height, canvas.width],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+    pdf.save(`${fileName}.pdf`);
+  }, []);
+  const buildEvaluationTemplate = useCallback(
+    async (userId: string, displayName: string, email?: string, normalizedResult?: any) => {
+      if (!detailSession) return null;
+      const { data: answersData, error: answersError } = await fetchCapacitacionUsuarioRespuestas(
+        detailSession.id,
+        userId,
+      );
+      if (answersError) {
+        console.error('Error cargando respuestas del usuario', answersError);
+        return null;
+      }
+      const sorted = (answersData ?? [])
+        .map((row: any, index: number) => ({
+          orden: row.orden ?? index + 1,
+          pregunta: row.pregunta ?? '',
+          respuestaTexto: (() => {
+            const response = row.capacitaciones_respuestas?.[0];
+            if (response?.respuesta) return response.respuesta;
+            if (response?.respuesta_json) {
+              try {
+                const parsed = JSON.parse(response.respuesta_json);
+                if (Array.isArray(parsed)) {
+                  return parsed
+                    .map((id: string) => row.opciones?.find((option: any) => option.id === id)?.label ?? id)
+                    .join(', ');
+                }
+              } catch {
+                return response.respuesta ?? '';
+              }
+            }
+            return response?.respuesta ?? 'Sin respuesta';
+          })(),
+        }))
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+      const creatorName =
+        detailSession.creador?.nombre ?? detailSession.created_by ?? 'Evaluador no especificado';
+      const parts = displayName.split(' ').filter(Boolean);
+      const apellidos = parts.shift() ?? displayName;
+      const nombres = parts.join(' ');
+      const resultEntry =
+        normalizedResult ?? normalizeResultEntry(participantResults[userId] ?? {});
+      const puntajeValue = Math.round(Number(resultEntry.score ?? 0) * 100);
+      const resultadoLabel =
+        (resultEntry.resultado as string) ?? (resultEntry.aprobado ? 'Aprobado' : 'Reprobado');
+      return {
+        props: {
+          codigo: 'RGI-06.03',
+          revision: detailSession.revisionNumero ?? '00',
+          fechaDocumento: new Date(
+            detailSession.updated_at ?? detailSession.created_at ?? Date.now(),
+          ).toLocaleDateString('es-AR'),
+          empleado: {
+            apellidos,
+            nombres,
+            fecha: new Date().toLocaleDateString('es-AR'),
+            email: email ?? '',
+            puesto: detailSession.puestoTrabajo ?? '',
+            tema: detailSession.titulo ?? '',
+          },
+          puntaje: `${puntajeValue}%`,
+          resultado: resultadoLabel,
+          evaluador: creatorName,
+          qa: sorted.map((item) => ({
+            orden: item.orden,
+            pregunta: item.pregunta,
+            respuesta: item.respuestaTexto,
+          })),
+        },
+        fileName: `${sanitizeSlug(detailSession.capacitacion ?? '')}-${sanitizeSlug(displayName)}-evaluacion`,
+      };
+    },
+    [detailSession, participantResults, sanitizeSlug, normalizeResultEntry],
+  );
+
+  const downloadEvaluation = useCallback(
+    async (participant: ParticipantRecord) => {
+      if (!participant?.usuarios?.id) return;
+      const normalizedParticipantResult = normalizeResultEntry(
+        participantResults[participant.usuarios.id] ?? {},
+      );
+      const result = await buildEvaluationTemplate(
+        participant.usuarios.id,
+        participant.usuarios.nombre ?? 'Usuario',
+        participant.usuarios.email,
+        normalizedParticipantResult,
+      );
+      if (!result) return;
+      setRenderTemplateProps(result.props);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await captureTemplatePdf(result.fileName);
+      setRenderTemplateProps(null);
+    },
+    [buildEvaluationTemplate, captureTemplatePdf],
+  );
+
+  const downloadEvaluationResult = useCallback(
+    async (result: any) => {
+      const userId = result.usuarios?.id ?? result.usuario_id;
+      if (!userId) return;
+      const displayName = result.usuarios?.nombre ?? result.usuarios?.email ?? 'Usuario';
+      const email = result.usuarios?.email ?? '';
+      const normalized = normalizeResultEntry(result);
+      const payload = await buildEvaluationTemplate(userId, displayName, email, normalized);
+      if (!payload) return;
+      setRenderTemplateProps(payload.props);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await captureTemplatePdf(payload.fileName);
+      setRenderTemplateProps(null);
+    },
+    [buildEvaluationTemplate, captureTemplatePdf],
+  );
   const [mailStatus, setMailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [mailError, setMailError] = useState('');
 
@@ -499,7 +657,7 @@ const Capacitaciones: React.FC = () => {
     const { data } = await fetchCapacitacionDetail(session.id);
     setDetailSession(data ?? session);
     const { data: resultados } = await fetchCapacitacionResultados(session.id);
-    setDetailResults(resultados ?? []);
+    setDetailResults((resultados ?? []).map(normalizeResultEntry));
     setDetailFilter('all');
   };
 
@@ -514,7 +672,7 @@ const Capacitaciones: React.FC = () => {
     const scores: Record<string, any> = {};
     (resultados ?? []).forEach((result) => {
       if (result.usuario_id) {
-        scores[result.usuario_id] = result;
+        scores[result.usuario_id] = normalizeResultEntry(result);
       }
     });
     setParticipantResults(scores);
@@ -1032,9 +1190,9 @@ const Capacitaciones: React.FC = () => {
               </div>
               {detailResults.length > 0 && (
                 <div className="rounded-3xl border border-stone-100 bg-slate-50 p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-700">Resultados del examen</p>
-                    <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-700">Resultados del examen</p>
+                        <div className="flex flex-wrap gap-2">
                       {[{ value: 'all', label: 'Todos' }, { value: 'approved', label: 'Aprobados' }, { value: 'failed', label: 'Reprobados' }].map((filter) => (
                         <button
                           key={filter.value}
@@ -1051,13 +1209,14 @@ const Capacitaciones: React.FC = () => {
                       ))}
                     </div>
                   </div>
+                  
                   {filteredDetailResults.length > 0 ? (
-                    <div className="grid gap-2">
-                      {filteredDetailResults.map((result) => (
-                        <div
-                          key={`${result.usuario_id}-${result.score}-${result.total_questions}`}
-                          className="flex items-center justify-between bg-white rounded-2xl border border-stone-200 p-3"
-                        >
+                      <div className="grid gap-2">
+                        {filteredDetailResults.map((result) => (
+                          <div
+                            key={`${result.usuario_id}-${result.score}-${result.total_questions}`}
+                            className="flex items-center justify-between bg-white rounded-2xl border border-stone-200 p-3"
+                          >
                           <div>
                             <p className="text-sm font-semibold text-stone-900">
                               {result.usuarios?.nombre ?? 'Usuario'}
@@ -1079,6 +1238,13 @@ const Capacitaciones: React.FC = () => {
                               {result.correct_answers}/{result.total_questions} correctas
                             </p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => downloadEvaluationResult(result)}
+                            className="rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
+                          >
+                            Descargar evaluación
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1127,35 +1293,42 @@ const Capacitaciones: React.FC = () => {
                 <p className="text-sm text-stone-500">No hay usuarios inscriptos aún.</p>
               ) : (
                 <div className="space-y-3">
-                  {currentParticipants.map((participant) => (
-                    <article
-                      key={participant.id}
-                      className="flex items-center justify-between rounded-2xl border border-stone-100 p-4"
-                    >
+                    {currentParticipants.map((participant) => (
+                      <article
+                        key={participant.id}
+                        className="flex items-center justify-between rounded-2xl border border-stone-100 p-4"
+                      >
                       <div>
                         <p className="text-sm font-semibold text-stone-900">
                           {participant.usuarios?.nombre ?? participant.usuarios?.email}
                         </p>
                         <p className="text-xs text-stone-400">{participant.created_at}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Estado</p>
-                        <p
-                          className={`text-sm font-semibold ${
-                            participant.estado === 'Confirmado'
-                              ? 'text-emerald-600'
-                              : participant.estado === 'Pendiente'
-                                ? 'text-amber-600'
-                                : 'text-red-600'
-                          }`}
-                        >
-                          {participant.estado}
-                        </p>
-                        <p className="text-xs text-stone-400">{participant.usuarios?.email}</p>
-                        {participant.usuarios?.id && participantResults[participant.usuarios.id] && (
-                          <div className="text-right mt-2 space-y-1">
-                            <p className="text-xs text-stone-400">
-                              Puntaje: {Math.round((participantResults[participant.usuarios.id].score ?? 0) * 100)}%
+                          <div className="text-right">
+                            <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Estado</p>
+                            <p
+                              className={`text-sm font-semibold ${
+                                participant.estado === 'Confirmado'
+                                  ? 'text-emerald-600'
+                                  : participant.estado === 'Pendiente'
+                                    ? 'text-amber-600'
+                                    : 'text-red-600'
+                              }`}
+                            >
+                              {participant.estado}
+                            </p>
+                            <p className="text-xs text-stone-400">{participant.usuarios?.email}</p>
+                            <button
+                              type="button"
+                              onClick={() => downloadEvaluation(participant)}
+                              className="mt-2 w-full rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
+                            >
+                              Descargar evaluación
+                            </button>
+                            {participant.usuarios?.id && participantResults[participant.usuarios.id] && (
+                              <div className="text-right mt-2 space-y-1">
+                                <p className="text-xs text-stone-400">
+                                  Puntaje: {Math.round((participantResults[participant.usuarios.id].score ?? 0) * 100)}%
                             </p>
                             <p
                               className={`text-xs font-semibold ${
@@ -1182,6 +1355,24 @@ const Capacitaciones: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {renderTemplateProps && (
+        <div
+          ref={templateRef}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            transform: 'translateX(-150vw)',
+            width: 840,
+            pointerEvents: 'none',
+            opacity: 1,
+            zIndex: -1,
+          }}
+        >
+          <EvaluacionTemplate {...renderTemplateProps} />
         </div>
       )}
     </div>
