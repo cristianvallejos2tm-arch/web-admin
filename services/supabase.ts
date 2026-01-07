@@ -246,6 +246,8 @@ export async function updateVehiculo(
 
 // Storage: subir imagen de vehículo
 const VEHICLES_BUCKET = (import.meta as any).env?.VITE_SUPABASE_VEHICLES_BUCKET || 'vehiculos';
+const CAPACITACIONES_BUCKET =
+    (import.meta as any).env?.VITE_SUPABASE_CAPACITACIONES_BUCKET || 'capacitaciones';
 
 export async function uploadVehicleImage(file: File) {
     const fileName = `${Date.now()}_${file.name}`;
@@ -255,6 +257,18 @@ export async function uploadVehicleImage(file: File) {
     });
     if (error) throw error;
     const { data } = supabase.storage.from(VEHICLES_BUCKET).getPublicUrl(fileName);
+    return data.publicUrl;
+}
+
+export async function uploadCapacitacionMaterial(file: File) {
+    const safeName = file.name.replace(/[^\w.-]/g, '_');
+    const fileName = `capacitaciones/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from(CAPACITACIONES_BUCKET).upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from(CAPACITACIONES_BUCKET).getPublicUrl(fileName);
     return data.publicUrl;
 }
 

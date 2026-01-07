@@ -21,6 +21,7 @@ import Profile from './components/Profile';
 import ChangePassword from './components/ChangePassword';
 import Configuration from './components/Configuration';
 import Vehicles from './components/Vehicles';
+import ObservationsModule from './components/observations/ObservationsModule';
 import { supabase } from './services/supabase';
 
 interface UserData {
@@ -245,6 +246,7 @@ const App: React.FC = () => {
           {activeTab === 'proveedores' && <Proveedores />}
           {activeTab === 'compras' && <Compras />}
           {activeTab === 'autorizaciones' && <Autorizaciones userEmail={userData?.email} userRole={userData?.rol} />}
+          {activeTab === 'observations' && <ObservationsModule />}
           {activeTab === 'analytics' && (
             <div className="flex items-center justify-center h-[60vh] text-slate-400">
               <p>Analytics Avanzado & Gemini Insights (Próximamente)</p>

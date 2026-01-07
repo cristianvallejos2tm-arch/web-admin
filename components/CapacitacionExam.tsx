@@ -1,4 +1,6 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import {
   supabase,
   fetchCapacitacionDetail,
@@ -7,7 +9,10 @@ import {
   submitCapacitacionRespuestas,
   createCapacitacionIntento,
   queueCapacitacionNotifications,
+  uploadCapacitacionMaterial,
 } from '../services/supabase';
+import DiplomaTemplate, { DiplomaTemplateProps } from './DiplomaTemplate';
+import { Script } from 'vm';
 
 interface QuestionRow {
   id: string;
@@ -69,6 +74,31 @@ const CapacitacionExam: React.FC = () => {
       return '/capacitaciones';
     }
     return `${window.location.origin}/capacitaciones`;
+  }, []);
+
+  const questionsSectionRef = useRef<HTMLDivElement | null>(null);
+  const scrollToQuestions = useCallback(() => {
+    questionsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const materialVideoUrl = useMemo(() => (capacitacion?.video_url ?? '').trim(), [capacitacion]);
+  const materialAttachments = useMemo(
+    () => (capacitacion?.archivos ?? []).filter((item) => Boolean(item?.url)),
+    [capacitacion],
+  );
+  const hasMaterials = Boolean(materialVideoUrl || materialAttachments.length);
+
+  const [diplomaProps, setDiplomaProps] = useState<DiplomaTemplateProps | null>(null);
+  const diplomaRef = useRef<HTMLDivElement | null>(null);
+
+  const sanitizeFilePart = useCallback((value: string) => {
+    return value
+      .trim()
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
   }, []);
 
   const remainingAttempts = Math.max(0, 3 - attempts);
@@ -224,6 +254,94 @@ const CapacitacionExam: React.FC = () => {
     }
   };
 
+  const captureDiplomaBlob = useCallback(async () => {
+  const el = diplomaRef.current;
+  if (!el) return null;
+
+  // Esperar 2 frames para que termine de renderizar
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  );
+
+  const canvas = await html2canvas(el, {
+    scale: 3, // 2 si te consume mucho
+    backgroundColor: "#fff",
+    useCORS: true,
+    allowTaint: true,
+    logging: false,
+    width: el.scrollWidth,
+    height: el.scrollHeight,
+  });
+
+  const imgData = canvas.toDataURL("image/png", 1.0);
+
+  // Diploma size EXACTO
+  const pdfW = 148.5;
+  const pdfH = 105;
+
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: [pdfW, pdfH],
+    compress: true,
+  });
+
+  // Imagen a tamaño exacto del PDF (0 márgenes)
+  pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH, undefined, "FAST");
+
+  return pdf.output("blob");
+}, []);
+
+
+  const formatAnswerForDiploma = useCallback(
+    (question: QuestionRow) => {
+      const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
+      if (question.tipo === 'texto') {
+        return answerState.text ?? '';
+      }
+      const selection = answerState.selectedOptions ?? [];
+      return selection
+        .map((optionId) => question.opciones.find((option) => option.id === optionId)?.label ?? optionId)
+        .join(', ');
+    },
+    [answers],
+  );
+
+  const createDiplomaForUser = useCallback(
+    async (displayName: string, userEmail: string, scoreValue: number, courseTitle: string) => {
+      const qa = questions.map((question, index) => ({
+        orden: index + 1,
+        pregunta: question.question,
+        respuesta: formatAnswerForDiploma(question),
+      }));
+      const fileSlug = [
+        sanitizeFilePart(courseTitle || 'capacitacion'),
+        sanitizeFilePart(displayName || 'usuario'),
+      ]
+        .filter(Boolean)
+        .join('-');
+      const props: DiplomaTemplateProps = {
+        nombreApellido: displayName,
+        curso: courseTitle,
+        calificacion: `${Math.round(scoreValue * 100)}%`,
+        fechaValidez: new Date().toLocaleDateString('es-AR'),
+      };
+      setDiplomaProps(props);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const blob = await captureDiplomaBlob();
+      setDiplomaProps(null);
+      if (!blob) return null;
+      const pdfFile = new File([blob], `${fileSlug || 'diploma'}.pdf`, { type: 'application/pdf' });
+      try {
+        return await uploadCapacitacionMaterial(pdfFile);
+      } catch (uploadError) {
+        console.error('Error subiendo el diploma', uploadError);
+        return null;
+      }
+    },
+    [captureDiplomaBlob, capacitacion?.instructor, capacitacion?.tipo, capacitacion?.titulo, formatAnswerForDiploma, questions, sanitizeFilePart],
+  );
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -303,15 +421,29 @@ const CapacitacionExam: React.FC = () => {
           message: '¡Aprobaste la capacitación! 🎉',
         });
         const userEmail = sessionData.session.user.email;
+        const displayName =
+          sessionData.session.user.user_metadata?.full_name ??
+          sessionData.session.user.user_metadata?.name ??
+          userEmail ??
+          'Colaborador';
+        const courseTitle = capacitacion?.titulo ?? 'la capacitación';
+        let diplomaUrl: string | null = null;
+        if (userEmail) {
+          diplomaUrl = await createDiplomaForUser(displayName, userEmail, score, courseTitle);
+        }
         if (userEmail) {
           const portalUrl = `${window.location.origin}/capacitaciones/${capacitacionId}`;
           const courseTitle = capacitacion?.titulo ?? 'la capacitación';
+          const diplomaSection = diplomaUrl
+            ? `<p>Descargá tu diploma oficial desde <a href="${diplomaUrl}">este enlace</a>.</p>`
+            : '';
           const bodySections = [
-            `<p>Hola ${sessionData.session.user.email},</p>`,
+            `<p>Hola ${displayName},</p>`,
             `<p>Felicitaciones por aprobar <strong>${courseTitle}</strong>.</p>`,
             capacitacion?.introduccion ? `<p>${capacitacion.introduccion}</p>` : '',
             capacitacion?.descripcion ? `<p>${capacitacion.descripcion}</p>` : '',
             `<p>Podés repasar el contenido desde el portal: <a href="${portalUrl}">${portalUrl}</a></p>`,
+            diplomaSection,
             '<p>Saludos,<br/>Equipo CAM</p>',
           ].filter(Boolean);
           const notificationEntry = {
@@ -405,6 +537,56 @@ const CapacitacionExam: React.FC = () => {
             )}
           </div>
         </div>
+
+        {hasMaterials && (
+          <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Contenido previo al examen</p>
+              <h2 className="text-lg font-semibold text-stone-900">Material recomendado</h2>
+            </div>
+            {materialVideoUrl && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                <p className="text-xs text-slate-500">Video / recurso principal</p>
+                <a
+                  href={materialVideoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-semibold text-amber-600 hover:underline"
+                >
+                  {materialVideoUrl}
+                </a>
+              </div>
+            )}
+            {materialAttachments.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-500">Archivos adjuntos</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {materialAttachments.map((attachment, index) => (
+                    <a
+                      key={`${attachment.url}-${index}`}
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold text-stone-900 transition hover:border-amber-300"
+                    >
+                      <span>{attachment.name || `Material ${index + 1}`}</span>
+                      <span className="text-xs text-amber-500">Abrir</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={scrollToQuestions}
+                className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/30 hover:bg-amber-600 transition"
+              >
+                Realizar examen
+              </button>
+            </div>
+          </div>
+        )}
 
         {popNotification && (
           <div
@@ -548,6 +730,25 @@ const CapacitacionExam: React.FC = () => {
             Volver al listado de capacitaciones
           </a>
         </div>
+        {diplomaProps && (
+          <div
+            ref={diplomaRef}
+            style={{
+            position: 'fixed',
+            left: '-99999px',
+            top: 0,
+            width: '148.5mm',
+            height: '105mm',
+            pointerEvents: 'none',
+            opacity: 1,
+            zIndex: -1,
+            overflow: 'hidden',
+            background: '#fff',
+    }}
+  >
+            <DiplomaTemplate {...diplomaProps} />
+          </div>
+        )}
       </div>
     </div>
   );

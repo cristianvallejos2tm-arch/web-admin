@@ -32,7 +32,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         'analytics': 'analytics',
         'profile': 'profile',
         'config': 'configuration',
-        'password': 'change-password'
+    'password': 'change-password',
+    'observaciones': 'observations',
     };
 
     const menuItems = [
@@ -53,6 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         { id: 'compras', label: 'Compras', icon: ShoppingCart, moduleCode: 'compras' },
         { id: 'autorizaciones', label: 'Autorizaciones', icon: ShieldCheck, moduleCode: 'autorizaciones' },
         { id: 'analytics', label: 'Análisis IA', icon: Activity, moduleCode: 'analytics' },
+        { id: 'observations', label: 'Obs. Seguridad', icon: ShieldCheck, moduleCode: 'observaciones' },
     ];
 
     const [profileOpen, setProfileOpen] = useState(false);

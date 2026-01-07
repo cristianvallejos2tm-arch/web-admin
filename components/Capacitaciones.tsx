@@ -27,6 +27,7 @@ import {
   fetchCapacitacionUsuarioRespuestas,
   fetchUsuariosLite,
   supabase,
+  uploadCapacitacionMaterial,
 } from '../services/supabase';
 
 interface QuestionRow {
@@ -107,7 +108,7 @@ const Capacitaciones: React.FC = () => {
   const [title, setTitle] = useState('');
   const [intro, setIntro] = useState('');
   const [description, setDescription] = useState('');
-  const [, setVideoFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoLink, setVideoLink] = useState('');
   const [attachments, setAttachments] = useState<AttachmentInput[]>(emptyAttachments());
   const [questionnaireName, setQuestionnaireName] = useState('');
@@ -155,6 +156,7 @@ const Capacitaciones: React.FC = () => {
     if (detailFilter === 'failed') {
       return normalizedDetailResults.filter((result) => !result.aprobado);
     }
+    
     return normalizedDetailResults;
   }, [detailFilter, normalizedDetailResults]);
   const captureTemplatePdf = useCallback(async (fileName: string) => {
@@ -443,6 +445,7 @@ const Capacitaciones: React.FC = () => {
       setIntro(record.introduccion ?? '');
       setDescription(record.descripcion ?? '');
       setVideoLink(record.video_url ?? '');
+      setVideoFile(null);
       setQuestionnaireName(record.cuestionario_nombre ?? '');
       setAttachments(
         Array.from({ length: 3 }, (_, index) => {
@@ -486,6 +489,7 @@ const Capacitaciones: React.FC = () => {
               ...attachment,
               file,
               name: file ? file.name : attachment.name,
+              url: file ? '' : attachment.url,
             }
           : attachment,
       ),
@@ -589,14 +593,40 @@ const Capacitaciones: React.FC = () => {
     setMailStatus('sent');
   };
 
+  const prepareAttachmentsPayload = useCallback(async () => {
+    const uploaded = await Promise.all(
+      attachments.map(async (attachment, index) => {
+        let url = attachment.url?.trim() || '';
+        if (attachment.file) {
+          try {
+            url = await uploadCapacitacionMaterial(attachment.file);
+          } catch (uploadError) {
+            console.error('Error subiendo el archivo adjunto', uploadError);
+          }
+        }
+        const name =
+          attachment.name?.trim() ||
+          attachment.file?.name ||
+          `Archivo ${index + 1}`;
+        return { name, url };
+      }),
+    );
+    return uploaded.filter((item) => item.url);
+  }, [attachments]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
     setIsSaving(true);
-    const attachmentsPayload = attachments.map((attachment) => ({
-      name: attachment.name || attachment.file?.name || '',
-      url: attachment.url || '',
-    }));
+    const attachmentsPayload = await prepareAttachmentsPayload();
+    let finalVideoUrl = videoLink.trim();
+    if (videoFile) {
+      try {
+        finalVideoUrl = await uploadCapacitacionMaterial(videoFile);
+      } catch (videoUploadError) {
+        console.error('Error subiendo el video', videoUploadError);
+      }
+    }
     const payload = {
       titulo: title,
       introduccion: intro,
@@ -607,7 +637,7 @@ const Capacitaciones: React.FC = () => {
       estado: editingSession?.estado ?? 'borrador',
       capacidad: editingSession?.capacidad ?? 0,
       cuestionario_nombre: questionnaireName,
-      video_url: videoLink,
+      video_url: finalVideoUrl,
       archivos: attachmentsPayload,
     };
     try {
@@ -618,23 +648,28 @@ const Capacitaciones: React.FC = () => {
         const { data } = await createCapacitacion(payload);
         capacitacionId = data?.id ?? null;
       }
-        if (capacitacionId) {
-          await upsertCapacitacionPreguntas(
-            capacitacionId,
-            questions.map((question) => ({
-              question: question.question,
-              answer: question.answer,
+      if (capacitacionId) {
+        const questionPayload = questions.map((question) => {
+          const answerValue =
+            question.tipo === 'texto'
+              ? question.answer
+              : (question.opciones ?? [])
+                  .filter((option) => (question.opciones_correctas ?? []).includes(option.id))
+                  .map((option) => option.label)
+                  .join(', ');
+          return {
+            question: question.question,
+            answer: answerValue,
             tipo: question.tipo,
-            opciones: question.opciones.map((option) => ({
+            opciones: (question.opciones ?? []).map((option) => ({
               id: option.id,
               label: option.label,
             })),
-            opciones_correctas: question.opciones_correctas,
-          })),
-        );
-        if (capacitacionId) {
-          await notifyAssignedUsuarios(capacitacionId);
-        }
+            opciones_correctas: question.opciones_correctas ?? [],
+          };
+        });
+        await upsertCapacitacionPreguntas(capacitacionId, questionPayload);
+        await notifyAssignedUsuarios(capacitacionId);
       }
       resetFormFields();
       setEditingSession(null);
@@ -1209,7 +1244,7 @@ const Capacitaciones: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  
+
                   {filteredDetailResults.length > 0 ? (
                       <div className="grid gap-2">
                         {filteredDetailResults.map((result) => (

@@ -1,5 +1,6 @@
 import React from 'react';
 import logo from '../logo.png';
+import diplomaBg from '../diploma.png?inline';
 
 export type EvaluacionQA = {
   orden: number;
@@ -34,7 +35,11 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     width: "210mm",
     height: "297mm",
-    background: "#fff",
+    backgroundColor: "#fff",
+    backgroundImage: `url(${diplomaBg})`,
+    backgroundSize: "cover",
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "center",
     fontFamily: "Arial, Calibri, sans-serif",
     color: "#000",
     boxSizing: "border-box",
