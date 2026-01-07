@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS public.observaciones_checklist (
 ALTER TABLE public.observaciones_seguridad ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.observaciones_checklist ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY obs_seguridad_user_select ON public.observaciones_seguridad
-  FOR SELECT USING (auth.uid() = usuario_id);
+CREATE POLICY obs_seguridad_public_select ON public.observaciones_seguridad
+  FOR SELECT USING (true);
 
 CREATE POLICY obs_seguridad_user_insert ON public.observaciones_seguridad
   FOR INSERT WITH CHECK (auth.uid() = usuario_id);

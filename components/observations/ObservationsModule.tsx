@@ -6,7 +6,7 @@ import ObservationsStats, { ObservationsStatsEntry } from './ObservationsStats';
 import { OBSERVATION_CHECKLIST } from './data';
 import {
   createObservation,
-  fetchUserObservations,
+  fetchObservations,
   ObservationChecklistEntry,
   ObservationRow,
 } from '../../services/observaciones';
@@ -58,9 +58,7 @@ export default function ObservationsModule() {
   const loadObservations = useCallback(async () => {
     setLoading(true);
     try {
-      const userId = await fetchCurrentUserId();
-      if (!userId) return;
-      const { data } = await fetchUserObservations(userId);
+      const { data } = await fetchObservations();
       setObservations(data ?? []);
     } catch (error) {
       console.error('No se pudieron cargar las observaciones', error);

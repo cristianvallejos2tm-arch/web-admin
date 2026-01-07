@@ -247,11 +247,7 @@ const App: React.FC = () => {
           {activeTab === 'compras' && <Compras />}
           {activeTab === 'autorizaciones' && <Autorizaciones userEmail={userData?.email} userRole={userData?.rol} />}
           {activeTab === 'observations' && <ObservationsModule />}
-          {activeTab === 'analytics' && (
-            <div className="flex items-center justify-center h-[60vh] text-slate-400">
-              <p>Analytics Avanzado & Gemini Insights (Próximamente)</p>
-            </div>
-          )}
+          
         </div>
       </main>
     </div>

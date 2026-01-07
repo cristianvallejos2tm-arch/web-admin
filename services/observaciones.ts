@@ -33,11 +33,10 @@ export type ObservationRow = {
   };
 };
 
-export async function fetchUserObservations(usuarioId: string) {
+export async function fetchObservations() {
   return supabase
     .from('observaciones_seguridad')
     .select('*, usuarios(id, nombre, email), observaciones_checklist(id, categoria, opcion, seleccionada)')
-    .eq('usuario_id', usuarioId)
     .order('created_at', { ascending: false });
 }
 
