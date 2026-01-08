@@ -22,6 +22,7 @@ import ChangePassword from './components/ChangePassword';
 import Configuration from './components/Configuration';
 import Vehicles from './components/Vehicles';
 import ObservationsModule from './components/observations/ObservationsModule';
+import NotificationsModule from './components/notifications/NotificationsModule';
 import { supabase } from './services/supabase';
 
 interface UserData {
@@ -247,6 +248,7 @@ const App: React.FC = () => {
           {activeTab === 'compras' && <Compras />}
           {activeTab === 'autorizaciones' && <Autorizaciones userEmail={userData?.email} userRole={userData?.rol} />}
           {activeTab === 'observations' && <ObservationsModule />}
+          {activeTab === 'notifications' && <NotificationsModule />}
           
         </div>
       </main>
