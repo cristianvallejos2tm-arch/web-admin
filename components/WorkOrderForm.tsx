@@ -6,6 +6,7 @@ interface WorkOrderFormProps {
     onBack: () => void;
 }
 
+// Formulario complejo para crear/confirmar órdenes de trabajo, subir presupuesto y vincular compras.
 const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
     const [form, setForm] = useState({
         vehiculoId: '',

@@ -7,6 +7,7 @@ export type ObservationsStatsEntry = {
   cantidad: number;
 };
 
+// Entradas que recibe el componente para mostrar estadísticas de observaciones.
 type Props = {
   entries: ObservationsStatsEntry[];
   loading: boolean;
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export default function ObservationsStats({ entries, loading, desde, hasta, onFilter, onBack }: Props) {
+  // Agrupa las entradas por categoría para mostrar bloques separados.
   const grouped = useMemo(() => {
     const map = new Map<string, ObservationsStatsEntry[]>();
     entries.forEach((entry) => {
@@ -27,6 +29,7 @@ export default function ObservationsStats({ entries, loading, desde, hasta, onFi
     return Array.from(map.entries());
   }, [entries]);
 
+  // Determina el valor máximo de cantidad para normalizar las barras de resumen.
   const maxCount = useMemo(() => {
     return entries.reduce((max, entry) => Math.max(max, entry.cantidad), 0);
   }, [entries]);

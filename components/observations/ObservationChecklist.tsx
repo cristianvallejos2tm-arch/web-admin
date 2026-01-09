@@ -8,6 +8,7 @@ type Props = {
   onToggle: (categoryId: string, option: string, checked: boolean) => void;
 };
 
+// Renderiza las categorías y opciones del checklist permitiendo marcar/desmarcar cada ítem.
 export default function ObservationChecklist({ value, onToggle }: Props) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">

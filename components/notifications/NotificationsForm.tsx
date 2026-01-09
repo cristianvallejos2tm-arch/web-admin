@@ -20,6 +20,7 @@ type Props = {
   onBasesChange: (bases: string[]) => void;
 };
 
+// Formulario controlado para armar notificaciones: tipo, bases, destinatarios y archivos.
 export default function NotificationsForm({ onSave, bases, onClose, fetchingUsers, users, onBasesChange }: Props) {
   const [values, setValues] = useState<NotificationsFormValues>({
     titulo: '',

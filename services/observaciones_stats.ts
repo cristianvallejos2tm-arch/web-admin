@@ -8,6 +8,7 @@ export type ObservationChecklistStatRow = {
   };
 };
 
+// Recupera estadísticas de checklist agrupadas por categoría/opción para un colaborador y rango dado.
 export async function fetchObservationChecklistStats(
   usuarioId: string,
   desde?: string,
@@ -18,6 +19,7 @@ export async function fetchObservationChecklistStats(
     .select('categoria, opcion, observacion:observaciones_seguridad(created_at, usuario_id)')
     .eq('observacion.usuario_id', usuarioId);
 
+  // Aplica filtros de fecha si el cliente los pasó para acotar el periodo analizado.
   if (desde) {
     query = query.gte('observacion.created_at', desde);
   }

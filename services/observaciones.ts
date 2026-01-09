@@ -34,6 +34,7 @@ export type ObservationRow = {
 };
 
 export async function fetchObservations() {
+  // Solicita las observaciones junto con el autor y el checklist para mostrarlas en el listado.
   return supabase
     .from('observaciones_seguridad')
     .select('*, usuarios(id, nombre, email), observaciones_checklist(id, categoria, opcion, seleccionada)')
@@ -41,6 +42,7 @@ export async function fetchObservations() {
 }
 
 export async function createObservation(payload: ObservationPayload) {
+  // Inserta la observación principal y luego agrega las respuestas del checklist si las hay.
   const { data, error } = await supabase
     .from('observaciones_seguridad')
     .insert([
@@ -61,6 +63,7 @@ export async function createObservation(payload: ObservationPayload) {
   }
 
   if (payload.checklist.length > 0) {
+    // Guarda las opciones seleccionadas para tener el detalle del checklist asociado.
     const checklistInsert = payload.checklist.map((entry) => ({
       observacion_id: data?.id,
       categoria: entry.categoria,
@@ -75,5 +78,6 @@ export async function createObservation(payload: ObservationPayload) {
     }
   }
 
+  // Devuelve el registro creado o el error que ocurrió durante el proceso.
   return { data, error: null };
 }

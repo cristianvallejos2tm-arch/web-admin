@@ -8,6 +8,8 @@ import {
     createOperadora
 } from '../services/supabase';
 
+// Gestor de usuarios: lista, busca, edita roles/operadoras y sincroniza accesos.
+
 interface Usuario {
     id: string;
     email: string;

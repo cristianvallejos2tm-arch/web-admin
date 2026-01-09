@@ -17,6 +17,7 @@ interface Solicitud {
     minuto?: string | null;
 }
 
+// Módulo de lubricantes y baterías que monitorea stock, solicitudes y registra ingresos.
 const Lubricants: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(25);

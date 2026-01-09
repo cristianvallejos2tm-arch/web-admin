@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import StatCard from './StatCard';
 import { fetchVehiculos, fetchShiftChanges } from '../services/supabase';
 
+// Dashboard completo: estadísticas de flota y cambios de turno con tabla y gráfico.
 const Dashboard: React.FC = () => {
     const [vehiculos, setVehiculos] = useState<any[]>([]);
     const [shifts, setShifts] = useState<any[]>([]);

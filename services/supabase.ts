@@ -13,39 +13,48 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Catálogos
+// Devuelve el listado completo de depósitos ordenado por nombre.
 export async function fetchDepositos() {
     return supabase.from('depositos').select('*').order('nombre');
 }
 
+// Trae las bases disponibles para los combos de selección.
 export async function fetchBases() {
     return supabase.from('bases').select('*').order('nombre');
 }
 
+// Lista los paños registrados ordenados por nombre.
 export async function fetchPanoles() {
     return supabase.from('panoles').select('*').order('nombre');
 }
 
+// Recupera las unidades organizativas ordenadas por nombre.
 export async function fetchUnidades() {
     return supabase.from('unidades').select('*').order('nombre');
 }
 
+// Regresa id, nombre y flags de proveedores para combos ligeros.
 export async function fetchProveedoresLite() {
     // Trae sólo lo necesario para los combos de selección
     return supabase.from('proveedores').select('id,nombre,es_externo,es_local').order('nombre');
 }
 
+// Devuelve usuarios básicos con id, nombre y email.
 export async function fetchUsuariosLite() {
     return supabase.from('usuarios').select('id,nombre,email').order('nombre');
 }
 
+// Lista todas las operadoras disponibles.
 export async function fetchOperadoras() {
     return supabase.from('operadoras').select('*').order('nombre');
 }
 
+// Inserta una nueva operadora y devuelve la fila creada.
 export async function createOperadora(nombre: string) {
     return supabase.from('operadoras').insert([{ nombre }]).select('*').single();
 }
 
+// Sincroniza las relaciones usuario-operadora (borra y vuelve a insertar).
 export async function syncUserOperadoras(userId: string, operadoraIds: string[]) {
     const { error: deleteError } = await supabase.from('usuarios_operadoras').delete().eq('usuario_id', userId);
     if (deleteError && deleteError.code === '42P01') {
@@ -71,6 +80,7 @@ export async function syncUserOperadoras(userId: string, operadoraIds: string[])
 }
 
 // Cubiertas - movimientos (ingresos/salidas)
+// Registra un movimiento de cubiertas (ingreso, salida o ajuste).
 export async function createCubiertaMovimiento(payload: {
     item_id?: string | null;
     deposito_id?: string | null;
@@ -88,10 +98,12 @@ export async function createCubiertaMovimiento(payload: {
     return supabase.from('cubiertas_movimientos').insert([payload]);
 }
 
+// Consulta el stock actual de cubiertas.
 export async function fetchCubiertasStock() {
     return supabase.from('cubiertas_stock').select('*');
 }
 
+// Agrega un registro de stock de cubiertas.
 export async function createCubiertaStock(payload: {
     deposito_id?: string | null;
     marca?: string;
@@ -105,6 +117,7 @@ export async function createCubiertaStock(payload: {
 }
 
 // Inventario general (para vincular cubiertas a un item de inventario)
+// Crea un ítem de inventario y devuelve su id.
 export async function createInventarioItem(payload: {
     nombre: string;
     categoria?: string;
@@ -121,11 +134,13 @@ export async function createInventarioItem(payload: {
     return supabase.from('inventario_items').insert([payload]).select('id').single();
 }
 
+// Lista los ítems de inventario ordenados por creación.
 export async function fetchInventarioItems() {
     return supabase.from('inventario_items').select('*').order('created_at', { ascending: false });
 }
 
 // Cubiertas - solicitudes
+// Registra una solicitud de cubiertas.
 export async function createCubiertaSolicitud(payload: {
     interno?: string;
     solicitante?: string;
@@ -143,11 +158,13 @@ export async function createCubiertaSolicitud(payload: {
     return supabase.from('cubiertas_solicitudes').insert([payload]);
 }
 
+// Trae las solicitudes de cubiertas más recientes.
 export async function fetchCubiertaSolicitudes() {
     return supabase.from('cubiertas_solicitudes').select('*').order('created_at', { ascending: false });
 }
 
 // Cubiertas - recapadas
+// Guarda una inspección de recapado con cantidades y observaciones.
 export async function createRecapInspeccion(payload: {
     bases?: string[];
     tipo_cubierta?: string;
@@ -167,11 +184,13 @@ export async function createRecapInspeccion(payload: {
     return supabase.from('cubiertas_recap_inspecciones').insert([payload]);
 }
 
+// Lista las inspecciones de recapado ordenadas por fecha.
 export async function fetchRecapInspecciones() {
     return supabase.from('cubiertas_recap_inspecciones').select('*').order('fecha', { ascending: false });
 }
 
 // Pañol - entregas
+// Inserta una entrega desde un paño con destinatario y cantidad.
 export async function createPanolEntrega(payload: {
     fecha: string;
     panol_id?: string;
@@ -186,12 +205,14 @@ export async function createPanolEntrega(payload: {
     return supabase.from('panol_entregas').insert([payload]);
 }
 
+// Trae las entregas de paño ordenadas por fecha.
 export async function fetchPanolEntregas() {
     // Seleccion simple para evitar errores si no hay FKs definidas
     return supabase.from('panol_entregas').select('*').order('fecha', { ascending: false });
 }
 
 // Evaluación de desempeño
+// Crea una evaluación de desempeño con competencias y comentarios.
 export async function createEvaluacionDesempeno(payload: {
     evaluado_id?: string | null;
     evaluador_id?: string | null;
@@ -205,16 +226,19 @@ export async function createEvaluacionDesempeno(payload: {
     return supabase.from('evaluaciones_desempeno').insert([payload]);
 }
 
+// Obtiene evaluaciones ordenadas por fecha de creación.
 export async function fetchEvaluacionesDesempeno() {
     return supabase.from('evaluaciones_desempeno').select('*').order('created_at', { ascending: false });
 }
 
 // Vehículos
+// Lista los vehículos ordenados por patente.
 export async function fetchVehiculos() {
     return supabase.from('vehiculos').select('*').order('patente');
 }
 
 
+// Crea un nuevo vehículo con los campos básicos.
 export async function createVehiculo(payload: {
     patente: string;
     marca?: string;
@@ -228,6 +252,7 @@ export async function createVehiculo(payload: {
     return supabase.from('vehiculos').insert([payload]);
 }
 
+// Actualiza los datos de un vehículo existente.
 export async function updateVehiculo(
     id: string,
     payload: {
@@ -249,6 +274,7 @@ const VEHICLES_BUCKET = (import.meta as any).env?.VITE_SUPABASE_VEHICLES_BUCKET 
 const CAPACITACIONES_BUCKET =
     (import.meta as any).env?.VITE_SUPABASE_CAPACITACIONES_BUCKET || 'capacitaciones';
 
+// Sube la foto de un vehículo al bucket y devuelve la URL pública.
 export async function uploadVehicleImage(file: File) {
     const fileName = `${Date.now()}_${file.name}`;
     const { error } = await supabase.storage.from(VEHICLES_BUCKET).upload(fileName, file, {
@@ -260,6 +286,7 @@ export async function uploadVehicleImage(file: File) {
     return data.publicUrl;
 }
 
+// Sube un archivo de capacitación y devuelve su URL.
 export async function uploadCapacitacionMaterial(file: File) {
     const safeName = file.name.replace(/[^\w.-]/g, '_');
     const fileName = `capacitaciones/${Date.now()}_${safeName}`;
@@ -273,6 +300,7 @@ export async function uploadCapacitacionMaterial(file: File) {
 }
 
 // Tareas
+// Crea una tarea con estado, prioridad, fecha y asignado.
 export async function createTask(payload: {
     titulo: string;
     descripcion?: string | null;
@@ -285,19 +313,23 @@ export async function createTask(payload: {
     return supabase.from('tareas').insert([payload]);
 }
 
+// Lista las tareas ordenadas por creación.
 export async function fetchTasks() {
     return supabase.from('tareas').select('*').order('created_at', { ascending: false });
 }
 
+// Actualiza el estado o prioridad de una tarea existente.
 export async function updateTask(id: string, payload: { estado?: string; prioridad?: string }) {
     return supabase.from('tareas').update(payload).eq('id', id);
 }
 
 // Ordenes de trabajo
+// Trae las órdenes de trabajo ordenadas por creación.
 export async function fetchWorkOrders() {
     return supabase.from('ordenes_trabajo').select('*').order('created_at', { ascending: false });
 }
 
+// Crea una orden de trabajo y devuelve su id.
 export async function createWorkOrder(payload: {
     numero?: string | null;
     titulo: string;
@@ -315,6 +347,7 @@ export async function createWorkOrder(payload: {
     return supabase.from('ordenes_trabajo').insert([payload]).select('id').single();
 }
 
+// Modifica los campos editables de una orden de trabajo.
 export async function updateWorkOrder(id: string, payload: Partial<{
     numero: string | null;
     titulo: string;
@@ -332,16 +365,19 @@ export async function updateWorkOrder(id: string, payload: Partial<{
     return supabase.from('ordenes_trabajo').update(payload).eq('id', id);
 }
 
+// Invoca la RPC que genera una compra externa desde una OT.
 export async function createExternalPurchaseFromWorkOrder(wo_id: string) {
     return supabase.rpc('create_external_purchase_from_work_order', { wo_id });
 }
 
+// Autoriza, rechaza o deriva compras externas mediante RPC.
 export async function authorizePurchase(purchase_id: string, action: 'APPROVE' | 'REJECT' | 'DERIVE', notes?: string) {
     return supabase.rpc('authorize_purchase', { purchase_id, action, notes: notes || null });
 }
 
 const WORKORDER_BUCKET = (import.meta as any).env?.VITE_SUPABASE_WORKORDER_BUCKET || 'ot-presupuestos';
 
+// Sube un presupuesto de una OT al bucket y retorna su URL.
 export async function uploadWorkOrderBudget(file: File) {
     const fileName = `${Date.now()}_${file.name}`;
     const { error } = await supabase.storage.from(WORKORDER_BUCKET).upload(fileName, file, {
@@ -354,10 +390,12 @@ export async function uploadWorkOrderBudget(file: File) {
 }
 
 // Cambios de turno
+// Lista los cambios de turno ordenados por fecha de inicio.
 export async function fetchShiftChanges() {
     return supabase.from('cambios_turno').select('*').order('inicio', { ascending: false });
 }
 
+// Registra un cambio de turno con turno, responsables y novedades.
 export async function createShiftChange(payload: {
     turno: 'manana' | 'tarde' | 'noche' | 'otro';
     inicio: string;
@@ -373,6 +411,7 @@ export async function createShiftChange(payload: {
 }
 
 // Lubricantes y baterías
+// Crea un ítem de lubricante o batería con subtipo y detalle.
 export async function createLubricantItem(payload: {
     nombre: string;
     unidad?: string;
@@ -403,6 +442,7 @@ export async function createLubricantItem(payload: {
     return { data: { id: itemId }, error: null };
 }
 
+// Consulta el stock detallado de lubricantes.
 export async function fetchLubricantsStock() {
     return supabase.from('inventario_items')
         .select('id,nombre,unidad,stock,stock_minimo,activo,created_at,lubricantes_baterias_detalle(subtipo,especificacion,marca)')
@@ -410,6 +450,7 @@ export async function fetchLubricantsStock() {
         .order('created_at', { ascending: false });
 }
 
+// Registra una solicitud de lubricantes con cantidades y fechas.
 export async function createLubricantSolicitud(payload: {
     interno?: string;
     solicitante?: string;
@@ -425,11 +466,13 @@ export async function createLubricantSolicitud(payload: {
     return supabase.from('lubricantes_solicitudes').insert([payload]);
 }
 
+// Lista las solicitudes de lubricantes ordenadas por fecha.
 export async function fetchLubricantSolicitudes() {
     return supabase.from('lubricantes_solicitudes').select('*').order('created_at', { ascending: false });
 }
 
 // Mantenimientos
+// Trae los planes de mantenimiento con datos del vehículo.
 export async function fetchMaintenances() {
     return supabase
         .from('mantenimientos')
@@ -437,6 +480,7 @@ export async function fetchMaintenances() {
         .order('created_at', { ascending: false });
 }
 
+// Crea una orden de mantenimiento programada.
 export async function createMaintenance(payload: {
     vehiculo_id: string;
     tipo: string;
@@ -448,6 +492,7 @@ export async function createMaintenance(payload: {
     return supabase.from('mantenimientos').insert([payload]);
 }
 
+// Actualiza un mantenimiento existente.
 export async function updateMaintenance(id: string, payload: Partial<{
     vehiculo_id: string;
     tipo: string;
@@ -459,11 +504,13 @@ export async function updateMaintenance(id: string, payload: Partial<{
     return supabase.from('mantenimientos').update(payload).eq('id', id);
 }
 
+// Elimina un mantenimiento (uso lógico según reglas).
 export async function deleteMaintenance(id: string) {
     return supabase.from('mantenimientos').delete().eq('id', id);
 }
 
 // Capacitaciones
+// Lista capacitaciones con metadatos para el listado.
 export async function fetchCapacitaciones() {
     return supabase
         .from('capacitaciones')
@@ -473,6 +520,7 @@ export async function fetchCapacitaciones() {
         .order('created_at', { ascending: false });
 }
 
+// Devuelve el detalle completo de una capacitación por id.
 export async function fetchCapacitacionDetail(id: string) {
     return supabase
         .from('capacitaciones')
@@ -481,6 +529,7 @@ export async function fetchCapacitacionDetail(id: string) {
         .single();
 }
 
+// Recupera los participantes y su estado.
 export async function fetchCapacitacionParticipants(capacitacionId: string) {
     return supabase
         .from('capacitaciones_inscripciones')
@@ -489,6 +538,7 @@ export async function fetchCapacitacionParticipants(capacitacionId: string) {
         .order('created_at', { ascending: true });
 }
 
+// Lista las preguntas y opciones del cuestionario.
 export async function fetchCapacitacionPreguntas(capacitacionId: string) {
     return supabase
         .from('capacitaciones_preguntas')
@@ -497,6 +547,7 @@ export async function fetchCapacitacionPreguntas(capacitacionId: string) {
         .order('orden', { ascending: true });
 }
 
+// Trae los intentos que hizo un usuario sobre esa capacitación.
 export async function fetchCapacitacionIntentos(capacitacionId: string, usuarioId: string) {
     return supabase
         .from('capacitaciones_intentos')
@@ -506,6 +557,7 @@ export async function fetchCapacitacionIntentos(capacitacionId: string, usuarioI
         .order('intento', { ascending: true });
 }
 
+// Obtiene resultados y puntajes de participantes.
 export async function fetchCapacitacionResultados(capacitacionId: string) {
     return supabase
         .from('capacitaciones_resultados')
@@ -514,6 +566,7 @@ export async function fetchCapacitacionResultados(capacitacionId: string) {
         .order('score', { ascending: false });
 }
 
+// Lista las respuestas enviadas por un usuario.
 export async function fetchCapacitacionUsuarioRespuestas(capacitacionId: string, usuarioId: string) {
     return supabase
         .from('capacitaciones_preguntas')
@@ -523,6 +576,7 @@ export async function fetchCapacitacionUsuarioRespuestas(capacitacionId: string,
         .order('orden', { ascending: true });
 }
 
+// Crea una capacitación nueva y devuelve su id.
 export async function createCapacitacion(payload: {
     titulo: string;
     introduccion?: string;
@@ -542,6 +596,7 @@ export async function createCapacitacion(payload: {
     return supabase.from('capacitaciones').insert([payload]).select('id').single();
 }
 
+// Actualiza los campos de una capacitación.
 export async function updateCapacitacion(id: string, payload: Partial<{
     titulo: string;
     introduccion: string;
@@ -560,6 +615,7 @@ export async function updateCapacitacion(id: string, payload: Partial<{
     return supabase.from('capacitaciones').update(payload).eq('id', id);
 }
 
+// Reemplaza las preguntas de una capacitación por las nuevas.
 export async function upsertCapacitacionPreguntas(
     capacitacionId: string,
     preguntas: Array<{ question: string; answer: string }>,
@@ -581,6 +637,7 @@ export async function upsertCapacitacionPreguntas(
     );
 }
 
+// Guarda o actualiza las respuestas de un usuario.
 export async function submitCapacitacionRespuestas(
     responses: Array<{
         pregunta_id: string;
@@ -597,6 +654,7 @@ export async function submitCapacitacionRespuestas(
         .upsert(responses, { onConflict: 'pregunta_id,usuario_id', ignoreDuplicates: false });
 }
 
+// Inserta múltiples inscripciones a una capacitación.
 export async function insertCapacitacionInscripciones(capacitacionId: string, usuarioIds: string[]) {
     if (usuarioIds.length === 0) {
         return { data: [], error: null };
@@ -611,6 +669,7 @@ export async function insertCapacitacionInscripciones(capacitacionId: string, us
         );
 }
 
+// Registra un intento con score y estado de aprobado.
 export async function createCapacitacionIntento(payload: {
     capacitacion_id: string;
     usuario_id: string;
@@ -621,6 +680,7 @@ export async function createCapacitacionIntento(payload: {
     return supabase.from('capacitaciones_intentos').insert([payload]);
 }
 
+// Encola notificaciones en email_outbox para envío posterior.
 export async function queueCapacitacionNotifications(
     entries: Array<{ to_email: string; subject: string; body: string }>,
 ) {
@@ -631,3 +691,4 @@ export async function queueCapacitacionNotifications(
         .from('email_outbox')
         .insert(entries.map((entry) => ({ ...entry, status: 'PENDING' })));
 }
+

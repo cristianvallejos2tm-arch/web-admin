@@ -19,6 +19,7 @@ interface VehiculoStats {
     kilometrajePromedio: number;
 }
 
+// Vista de flota que agrupa inspecciones por patente y presenta estado/kilometraje.
 const Fleet: React.FC = () => {
     const [vehiculos, setVehiculos] = useState<VehiculoStats[]>([]);
     const [loading, setLoading] = useState(true);

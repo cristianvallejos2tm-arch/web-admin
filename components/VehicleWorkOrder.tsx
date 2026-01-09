@@ -1,6 +1,8 @@
 import React from 'react';
 import { ArrowLeft, Search, Calendar, Clock, CheckCircle, AlertCircle, HelpCircle } from 'lucide-react';
 
+// Muestra las órdenes de trabajo relacionadas a un vehículo y permite navegar/filtrar el historial.
+
 interface VehicleWorkOrderProps {
     vehicle: any;
     onBack: () => void;

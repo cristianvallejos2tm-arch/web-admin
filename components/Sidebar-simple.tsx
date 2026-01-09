@@ -10,6 +10,7 @@ interface SidebarProps {
     userRole?: string; // User role
 }
 
+// Barra lateral con navegación basada en módulos asignados y rol del usuario.
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, userName, userModules = [], userRole }) => {
     // Mapeo de IDs de módulos a IDs de menú
     const moduleToMenuMap: { [key: string]: string } = {

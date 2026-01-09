@@ -16,6 +16,7 @@ interface InventoryItem {
     rowColor?: string;
 }
 
+// Administra inventario: listados, filtros y formularios de ingreso/salida.
 const Inventory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(25);

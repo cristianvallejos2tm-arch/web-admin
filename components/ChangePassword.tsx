@@ -1,5 +1,6 @@
 import React from 'react';
 
+// Formulario simple para cambiar la contraseña del usuario actual.
 const ChangePassword: React.FC = () => {
     return (
         <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100 max-w-2xl">

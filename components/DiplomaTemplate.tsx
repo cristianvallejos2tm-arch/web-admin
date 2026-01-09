@@ -49,6 +49,7 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 
+// Presenta el diseño del diploma que se convierte en PDF para descargar.
 const DiplomaTemplate: React.FC<DiplomaTemplateProps> = ({
   nombreApellido,
   curso,

@@ -21,6 +21,7 @@ interface VehicleDetailProps {
     onBack: () => void;
 }
 
+// Detalla un vehículo con pestañas para su ficha, ordenes e historial.
 const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
     const [activeTab, setActiveTab] = useState('detalle');
 

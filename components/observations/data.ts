@@ -4,6 +4,7 @@ export type ObservationChecklistCategory = {
   options: string[];
 };
 
+// Checklist fijo categorizado que usa el formulario para clasificar observaciones de seguridad.
 export const OBSERVATION_CHECKLIST: ObservationChecklistCategory[] = [
   {
     id: 'epp',

@@ -24,6 +24,7 @@ interface InspectionDetailModalProps {
     onClose: () => void;
 }
 
+// Modal con todos los detalles de una inspección, checklist crítico/preventivo, daños y fotos.
 const InspectionDetailModal: React.FC<InspectionDetailModalProps> = ({ inspeccion, onClose }) => {
     if (!inspeccion) return null;
 

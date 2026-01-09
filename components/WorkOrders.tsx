@@ -16,6 +16,7 @@ const WorkOrders: React.FC = () => {
     const [usuarios, setUsuarios] = useState<any[]>([]);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+    // Trae la lista completa de ordenes de trabajo y actualiza el estado de carga y errores.
     const loadOrders = async () => {
         setLoading(true);
         const { data, error } = await fetchWorkOrders();
@@ -29,6 +30,7 @@ const WorkOrders: React.FC = () => {
         setOrders(data || []);
     };
 
+    // Carga los catalogos auxiliares de vehiculos y usuarios para mostrar etiquetas legibles.
     const loadCatalogs = async () => {
         const [{ data: vehs }, { data: users }] = await Promise.all([fetchVehiculos(), fetchUsuariosLite()]);
         setVehiculos(vehs || []);
@@ -40,6 +42,7 @@ const WorkOrders: React.FC = () => {
         loadCatalogs();
     }, []);
 
+    // Filtra las ordenes en memoria segun el termino de busqueda ingresado por el usuario.
     const filtered = useMemo(() => {
         const term = search.toLowerCase();
         return orders.filter((o) => {
@@ -55,6 +58,7 @@ const WorkOrders: React.FC = () => {
     const pendientes = filtered.filter((o) => o.estado !== 'cerrada' && o.estado !== 'cancelada');
     const finalizadas = filtered.filter((o) => o.estado === 'cerrada' || o.estado === 'cancelada');
 
+    // Devuelve una etiqueta legible del vehiculo con patente y modelo cuando esta disponible.
     const vehiculoLabel = (id?: string | null) => {
         if (!id) return '�';
         const v = vehiculos.find((x) => x.id === id);
@@ -62,6 +66,7 @@ const WorkOrders: React.FC = () => {
         return `${v.patente || ''} ${v.marca ? `- ${v.marca}` : ''} ${v.modelo ? `(${v.modelo})` : ''}`.trim();
     };
 
+    // Devuelve el nombre o correo del responsable asignado, o muestra el id si no existe el registro.
     const usuarioLabel = (id?: string | null) => {
         if (!id) return '�';
         const u = usuarios.find((x) => x.id === id);
@@ -69,6 +74,7 @@ const WorkOrders: React.FC = () => {
         return u.nombre || u.email || id;
     };
 
+    // Cambia el estado de la orden y refresca la lista para reflejar el nuevo valor.
     const handleStatusChange = async (id: string, estado: string) => {
         setUpdatingId(id);
         const { error } = await updateWorkOrder(id, { estado });
@@ -84,6 +90,7 @@ const WorkOrders: React.FC = () => {
         }
     };
 
+    // Selector que permite cambiar el estado de la orden manteniendo el bloqueo mientras se actualiza.
     const StatusSelect = ({ order }: { order: any }) => (
         <select
             value={order.estado || 'abierta'}

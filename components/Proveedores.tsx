@@ -29,6 +29,7 @@ interface Proveedor {
   created_at?: string;
 }
 
+// Maneja listado, búsqueda y edición de proveedores con modal expansible por secciones.
 const Proveedores: React.FC = () => {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);

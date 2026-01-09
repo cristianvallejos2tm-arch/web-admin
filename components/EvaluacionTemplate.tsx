@@ -8,6 +8,7 @@ export type EvaluacionQA = {
   respuesta: string;
 };
 
+// Renderiza el formato impreso del informe de evaluación con el detalle de preguntas y puntajes.
 export type EvaluacionTemplateProps = {
   codigo: string;            // "RGI-06.03"
   revision: string;          // "00"

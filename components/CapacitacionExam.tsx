@@ -47,6 +47,8 @@ interface AttemptRecord {
   created_at?: string;
 }
 
+// Página pública para resolver el examen de una capacitación, gestiona login, intentos,
+// envío de respuestas, notificaciones y generación de diploma.
 const CapacitacionExam: React.FC = () => {
   const [capacitacion, setCapacitacion] = useState<CapacitacionSummary | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);

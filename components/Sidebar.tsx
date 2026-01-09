@@ -6,6 +6,7 @@ interface SidebarProps {
     setActiveTab: (tab: string) => void;
 }
 
+// Sidebar estático para navegación principal; resalta rutas activas y despliega perfil.
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },

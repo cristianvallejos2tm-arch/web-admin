@@ -80,6 +80,7 @@ const TriggerCard = ({
     );
 };
 
+// Módulo para programar, editar y listar planes de mantenimiento junto a sus reglas de disparo.
 const Maintenance: React.FC = () => {
     const [triggers, setTriggers] = useState({ date: true, hours: false, km: false });
     const [triggerValues, setTriggerValues] = useState({

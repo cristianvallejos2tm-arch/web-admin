@@ -18,6 +18,7 @@ interface ChecklistSection {
     items: ChecklistItem[];
 }
 
+// Formulario de cambio de turno con checklist de chequeo de unidad y datos del conductor/vehículo.
 const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) => {
     // Form State
     const [date, setDate] = useState('2025-12-12');

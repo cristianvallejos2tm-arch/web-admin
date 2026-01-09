@@ -28,6 +28,7 @@ interface TireRequest {
     funcion: string;
 }
 
+// Administra cubiertas: ingresos, solicitudes, recapados, stock y estadísticas.
 const Tires: React.FC = () => {
     const [searchTermPending, setSearchTermPending] = useState('');
     const [searchTermFinalized, setSearchTermFinalized] = useState('');

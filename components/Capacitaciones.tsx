@@ -97,6 +97,7 @@ const emptyAttachments = (): AttachmentInput[] =>
     file: null,
   }));
 
+// Módulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
 const Capacitaciones: React.FC = () => {
   const [trainings, setTrainings] = useState<CapacitacionSummary[]>([]);
   const [isListLoading, setIsListLoading] = useState(false);
@@ -290,6 +291,7 @@ const Capacitaciones: React.FC = () => {
   const [mailStatus, setMailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [mailError, setMailError] = useState('');
 
+  // Recupera el listado general de capacitaciones para mostrar en el dashboard.
   const loadCapacitaciones = async () => {
     setIsListLoading(true);
     const { data, error } = await fetchCapacitaciones();
@@ -306,6 +308,7 @@ const Capacitaciones: React.FC = () => {
     loadUsuariosCatalogo();
   }, []);
 
+  // Carga rápida del catálogo de usuarios disponible para asignar a capacitaciones.
   const loadUsuariosCatalogo = async () => {
     const { data, error } = await fetchUsuariosLite();
     if (error) {
@@ -368,6 +371,7 @@ const Capacitaciones: React.FC = () => {
     setSelectedUsuarioIds([]);
   };
 
+  // Registra las inscripciones en la tabla y encola notificaciones por correo para los usuarios asignados.
   const assignAndNotifyUsuarios = async (capacitacionId: string) => {
     if (selectedUsuarioIds.length === 0) return;
     const assignedUsers = usuariosCatalogo.filter((user) => selectedUsuarioIds.includes(user.id));
@@ -405,6 +409,7 @@ const Capacitaciones: React.FC = () => {
     }
   };
 
+  // Ejecuta la función remota que despacha la cola de emails desde el backend.
   const triggerEmailDispatch = async () => {
     try {
       await supabase.functions.invoke('processEmailQueue');

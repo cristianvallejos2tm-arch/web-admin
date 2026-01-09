@@ -8,6 +8,7 @@ interface VehicleEditProps {
     onBack: () => void;
 }
 
+// Formulario completo para editar datos, estado y consumo de un vehículo, incluyendo foto.
 const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
     const [form, setForm] = useState({
         id: vehicle?.id || '',

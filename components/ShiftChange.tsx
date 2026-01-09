@@ -19,6 +19,7 @@ interface ShiftChangeProps {
     userName?: string;
 }
 
+// Lista cambios de turno, refresca en tiempo real y permite generar/reportar cada turno.
 const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(50);

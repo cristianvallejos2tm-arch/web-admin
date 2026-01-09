@@ -8,6 +8,7 @@ interface WorkOrderStatsProps {
 }
 
 const WorkOrderStats: React.FC<WorkOrderStatsProps> = ({ onBack, orders }) => {
+    // Calcula totales que se muestran en la gráfica según los estados actuales.
     const counts = useMemo(() => {
         const total = orders.length;
         const pendientes = orders.filter((o) => o.estado !== 'cerrada' && o.estado !== 'cancelada').length;
@@ -19,10 +20,11 @@ const WorkOrderStats: React.FC<WorkOrderStatsProps> = ({ onBack, orders }) => {
         ];
     }, [orders]);
 
+    // Renderiza la vista de estadísticas con botón volver y el gráfico resumen.
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-blue-600">Estad�sticas de O.T.</h1>
+                <h1 className="text-2xl font-bold text-blue-600">Estad�sticas de O.T.</h1>
                 <button
                     onClick={onBack}
                     className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"

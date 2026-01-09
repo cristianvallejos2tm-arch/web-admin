@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, ChevronRight } from 'lucide-react';
 import { createPanolEntrega, fetchPanolEntregas, fetchPanoles, fetchBases, fetchUnidades } from '../services/supabase';
 
+// Área de paños: lista entregas recientes, filtra y registra nuevas salidas hacia base/paño.
 const Panol: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(25);

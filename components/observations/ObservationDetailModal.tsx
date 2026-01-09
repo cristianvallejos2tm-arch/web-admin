@@ -7,6 +7,7 @@ type Props = {
   onClose: () => void;
 };
 
+// Modal que muestra el detalle completo de una observación seleccionada.
 export default function ObservationDetailModal({ observation, isOpen, onClose }: Props) {
   if (!isOpen || !observation) {
     return null;

@@ -28,6 +28,7 @@ const getChecklistEntries = (checklist: Record<string, string[]>) => {
   );
 };
 
+// Obtiene el usuario autenticado para asociar cada observación con su autor.
 const fetchCurrentUserId = async () => {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
@@ -55,6 +56,7 @@ export default function ObservationsModule() {
 
   const formRef = useRef<HTMLDivElement>(null);
 
+  // Carga la lista completa y la refresca al guardar una observación.
   const loadObservations = useCallback(async () => {
     setLoading(true);
     try {
@@ -71,6 +73,7 @@ export default function ObservationsModule() {
     loadObservations();
   }, [loadObservations]);
 
+  // Arma el payload completo incluyendo checklist y manda a crear la observación.
   const handleSave = async (values: ObservationFormValues) => {
     try {
       const userId = await fetchCurrentUserId();
@@ -105,6 +108,7 @@ export default function ObservationsModule() {
   // ✅ Toggle de formulario (abre/cierra)
   // - Si abre: cierra stats y hace scroll
   // - Si cierra: solo cierra
+  // Muestra u oculta el formulario y cierra las estadísticas al abrirlo.
   const handleToggleForm = () => {
     setShowForm((prev) => {
       const next = !prev;
@@ -120,6 +124,7 @@ export default function ObservationsModule() {
     setShowForm(false);
   };
 
+  // Obtiene las estadísticas filtradas por fechas para el usuario actual.
   const loadStats = useCallback(async (desde?: string, hasta?: string) => {
     setStatsLoading(true);
     try {

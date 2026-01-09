@@ -90,6 +90,7 @@ const App: React.FC = () => {
     setIsAuthenticated(true);
   };
 
+  // Al montar, intenta restaurar sesión desde Supabase/localStorage y recuerda la última pestaña.
   useEffect(() => {
     const loadSession = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -102,11 +103,13 @@ const App: React.FC = () => {
     loadSession();
   }, []);
 
+  // Cambia la pestaña activa y la persiste en localStorage para la próxima visita.
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     localStorage.setItem(TAB_KEY, tab);
   };
 
+  // Procesa el formulario de login usando Supabase Auth y carga los datos del usuario.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
@@ -132,6 +135,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Cierra sesión y limpia el estado/localStorage para volver al login.
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setIsAuthenticated(false);
@@ -142,6 +146,7 @@ const App: React.FC = () => {
     localStorage.removeItem(TAB_KEY);
   };
 
+  // Mientras no esté autenticado mostramos el formulario de inicio de sesión.
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
@@ -202,6 +207,7 @@ const App: React.FC = () => {
     );
   }
 
+  // Una vez autenticado mostramos el layout principal con sidebar y vistas por pestaña.
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
       {/* Sidebar */}

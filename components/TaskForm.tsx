@@ -7,6 +7,7 @@ interface TaskFormProps {
     onSaved: () => void;
 }
 
+// Formulario de tarea: selecciona vehículo, responsable y describe el pendiente que se crea en la base.
 const TaskForm: React.FC<TaskFormProps> = ({ onBack, onSaved }) => {
     const [form, setForm] = useState({
         vehiculoId: '',

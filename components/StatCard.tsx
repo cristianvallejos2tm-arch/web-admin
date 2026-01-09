@@ -10,6 +10,7 @@ interface StatCardProps {
   color?: 'amber' | 'blue' | 'red' | 'green';
 }
 
+// Tarjeta reutilizable para mostrar indicadores resumidos con icono y tendencia opcional.
 const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, trend, trendUp, color = 'blue' }) => {
     
   const colorClasses = {

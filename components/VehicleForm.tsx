@@ -60,6 +60,7 @@ export const sectorFunciones: Record<string, string[]> = {
     VACTOR: ['VACTOR'],
 };
 
+// Formulario para registrar nuevos vehículos con datos técnicos, consumo e imagen.
 const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
     const [form, setForm] = useState({
         patente: '',

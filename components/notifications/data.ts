@@ -1,3 +1,4 @@
+// Opciones de tipo de notificación que se muestran en los select del módulo.
 export type NotificationTypeOption = {
   id: string;
   label: string;
@@ -10,6 +11,7 @@ export const NOTIFICATION_TYPES: NotificationTypeOption[] = [
   { id: 'recordatorio', label: 'Recordatorio', description: 'Seguimiento programado para una tarea' },
 ];
 
+// Etiquetas y colores que se usan para mostrar el estado de cada notificación.
 export type NotificationStatusLabel = {
   id: string;
   label: string;

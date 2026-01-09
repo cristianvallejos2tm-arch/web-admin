@@ -7,6 +7,7 @@ type Props = {
   onViewDetail: (notification: NotificationRecord) => void;
 };
 
+// Lista las notificaciones publicadas mostrando cant. de destinatarios leídos y acciones.
 export default function NotificationsList({ notifications, loading, onViewDetail }: Props) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">

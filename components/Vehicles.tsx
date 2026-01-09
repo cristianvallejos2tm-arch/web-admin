@@ -7,6 +7,8 @@ import VehicleForm from './VehicleForm';
 import VehicleEdit from './VehicleEdit';
 import { fetchVehiculos } from '../services/supabase';
 
+// Pantalla principal de la flota que lista vehículos, exporta/filtra y abre fichas/acciones rápidas.
+
 interface Vehicle {
     id: string;
     internalNumber: string;

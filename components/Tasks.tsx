@@ -1,3 +1,4 @@
+// Task board: shows list, filters, detail modal and creation flow.
 import React, { useEffect, useState } from 'react';
 import { Plus, Eye, X } from 'lucide-react';
 import TaskForm from './TaskForm';

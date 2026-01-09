@@ -24,6 +24,7 @@ const createChecklistState = (): ObservationChecklistValue =>
     return acc;
   }, {});
 
+// Componente controlado para crear observaciones con checklist y validaciones mínimas.
 export default function ObservationForm({ onSave }: Props) {
   const [values, setValues] = useState<ObservationFormValues>({
     area: '',

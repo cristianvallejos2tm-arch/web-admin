@@ -8,6 +8,7 @@ type Props = {
   onClose: () => void;
 };
 
+// Modal que muestra el detalle completo de una notificación y sus destinatarios.
 export default function NotificationDetail({ notification, onClose, isOpen }: Props) {
   if (!notification || !isOpen) return null;
 

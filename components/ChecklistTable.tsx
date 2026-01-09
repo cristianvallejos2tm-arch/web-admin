@@ -7,6 +7,7 @@ interface ChecklistTableProps {
   onAnalyze: (report: ChecklistReport) => void;
 }
 
+// Tabla que muestra los reportes recientes y permite saltar al análisis asistido.
 const ChecklistTable: React.FC<ChecklistTableProps> = ({ reports, onAnalyze }) => {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">

@@ -21,6 +21,7 @@ interface PurchaseRow {
   work_order?: any | null;
 }
 
+// Panel para autorizadores: lista compras pendientes y permite aprobar/rechazar/derivar.
 const Autorizaciones: React.FC<AutorizacionesProps> = ({ userEmail, userRole }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [rows, setRows] = useState<PurchaseRow[]>([]);

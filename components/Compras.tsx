@@ -17,6 +17,7 @@ interface Compra {
   work_order?: any | null;
 }
 
+// Panel para listar, buscar y gestionar compras (crear/editar/borrar) y explorar la OT vinculada.
 const Compras: React.FC = () => {
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);

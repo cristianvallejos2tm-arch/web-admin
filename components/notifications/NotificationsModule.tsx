@@ -5,13 +5,13 @@ import NotificationsForm, { NotificationsFormValues } from './NotificationsForm'
 import NotificationsList from './NotificationsList';
 import { supabase } from '../../services/supabase';
 
-
-
+// Obtiene el id del usuario conectado para asociar la notificación a su autor.
 const fetchCurrentUserId = async () => {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
 };
 
+// Módulo que lista notificaciones, abre el formulario y muestra el detalle cuando se selecciona una fila.
 export default function NotificationsModule() {
   const [bases, setBases] = useState<{ id: string; nombre: string }[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);

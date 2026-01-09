@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+// Muestra los datos de perfil del usuario con campos solo lectura (placeholder).
 const Profile: React.FC = () => {
     // Dummy data from screenshot
     const [formData] = useState({

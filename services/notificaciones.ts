@@ -25,6 +25,7 @@ export type NotificationRecipient = {
   };
 };
 
+// Trae todas las notificaciones recientes junto con sus relaciones para poblar el listado.
 export async function fetchNotifications() {
   return supabase
     .from('notificaciones')
@@ -37,6 +38,7 @@ export async function fetchNotifications() {
     .order('creado_en', { ascending: false });
 }
 
+// Recupera una sola notificación con sus destinatarios para mostrar el detalle completo.
 export async function fetchNotificationDetail(id: string) {
   return supabase
     .from('notificaciones')
@@ -52,6 +54,7 @@ export async function fetchNotificationDetail(id: string) {
 
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? 'https://yzawzrmzqmwhauvonjpb.supabase.co';
 
+// Compone el cuerpo HTML que se enviará por correo para notificar al destinatario.
 const buildEmailBody = (options: {
   nombre: string;
   mensaje: string;
@@ -63,7 +66,7 @@ const buildEmailBody = (options: {
   const anonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 const baseUrl = supabaseUrl.replace(/\/$/, '');
 const link = `${baseUrl}/functions/v1/markNotificationRead?notificacion=${options.notificacionId}&destinatario=${options.destinatarioId}&apikey=${anonKey}`;
- return `
+  return `
 <!doctype html>
 <html lang="es">
 <head><meta charset="utf-8" /></head>
@@ -88,6 +91,7 @@ const link = `${baseUrl}/functions/v1/markNotificationRead?notificacion=${option
 `;
 };
 
+// Crea la notificación, guarda destinatarios/bases y dispara el envío de correos pendientes.
 export async function createNotification(payload: {
   titulo: string;
   mensaje: string;
@@ -170,6 +174,7 @@ export async function createNotification(payload: {
   return { data: { notificationId, recipients: recipients ?? [] }, error: null };
 }
 
+// Actualiza la lectura de la notificación para que el contador de pendientes se refresque.
 export async function markNotificationRead(recipientId: string) {
   return supabase
     .from('notificaciones_destinatarios')
@@ -177,10 +182,12 @@ export async function markNotificationRead(recipientId: string) {
     .eq('id', recipientId);
 }
 
+// Trae las bases disponibles para que la interfaz permita seleccionar el ámbito de la notificación.
 export async function fetchBases() {
   return supabase.from('bases').select('*').order('nombre');
 }
 
+// Obtiene los usuarios vinculados a las bases seleccionadas para poblar destinatarios.
 export async function fetchUsersByBases(baseIds: string[]) {
   if (baseIds.length === 0) {
     return { data: [], error: null };

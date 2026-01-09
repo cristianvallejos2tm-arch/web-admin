@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { createEvaluacionDesempeno, fetchEvaluacionesDesempeno } from '../services/supabase';
 
+// Panel para registrar evaluaciones de desempeño, responder cuestionarios y revisar historial.
 const PerformanceEval: React.FC = () => {
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState({

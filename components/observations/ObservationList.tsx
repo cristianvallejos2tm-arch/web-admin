@@ -9,6 +9,7 @@ type Props = {
   onNew?: () => void;
 };
 
+// Renderiza la tabla principal de observaciones y controla refrescar/nueva entrada.
 export default function ObservationList({
   observations,
   loading,

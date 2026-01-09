@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Save, Bell, Globe, Shield, Info } from 'lucide-react';
 
+// Página de configuración general con toggles de notificaciones y datos del sistema.
 const Configuration: React.FC = () => {
     const [emailAlerts, setEmailAlerts] = useState(true);
     const [systemNotifs, setSystemNotifs] = useState(true);

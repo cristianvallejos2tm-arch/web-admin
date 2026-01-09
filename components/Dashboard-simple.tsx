@@ -14,6 +14,7 @@ interface Inspeccion {
     estado_global?: string;
 }
 
+// Panel/vista resumen con estadísticas de inspecciones y reporte reciente.
 const Dashboard: React.FC = () => {
     const [inspecciones, setInspecciones] = useState<Inspeccion[]>([]);
     const [loading, setLoading] = useState(true);
