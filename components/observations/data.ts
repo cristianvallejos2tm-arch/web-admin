@@ -18,12 +18,11 @@ export const OBSERVATION_CHECKLIST: ObservationChecklistCategory[] = [
   },
   {
     id: 'posiciones',
-    label: 'Posiciones de las personas',
+    label: 'Posiciones del cuerpo',
     options: [
       'Manos y/o pies en zonas de peligro (pellizco, aprisionamiento, corte)',
       'Sobre-esfuerzos',
-      'Ubicación en la línea de fuego',
-      'Postura incorrecta o incómoda para la tarea',
+      'Postura incorrecta o incómoda',
       'Ubicarse por debajo de cargas suspendidas/caída de objetos',
     ],
   },
@@ -31,16 +30,14 @@ export const OBSERVATION_CHECKLIST: ObservationChecklistCategory[] = [
     id: 'herramientas',
     label: 'Herramientas y equipos de trabajo',
     options: [
-      'En condiciones inseguras',
       'En malas condiciones',
-      'No sabe utilizar los equipos / herramientas',
       'Se usan de forma incorrecta',
       'No es adecuada/o para la tarea',
     ],
   },
   {
     id: 'normas',
-    label: 'Normas y/o procedimientos',
+    label: 'Procedimientos',
     options: [
       'No se cumplen',
       'No es adecuado',
@@ -50,22 +47,15 @@ export const OBSERVATION_CHECKLIST: ObservationChecklistCategory[] = [
   },
   {
     id: 'frente',
-    label: 'Frente de trabajo',
+    label: 'Areas de trabajo',
     options: [
-      'No se confeccionó el ATS',
-      'Uso insuficiente de bloqueos o barreras',
       'Falta de orden y limpieza',
-      'Falta señalización y/o delimitación de zonas de peligro',
+      'Suelos, pasillos obstruidos, áreas en malas condiciones, etc',
+      'Instalaciones en mal estado(eléctricas, gas, aire comprimido, otras.)',
+      'Falta señalizacion y/o delimitación de zonas de peligro',
+      'Condiciones ambientales (iluminacion, ruido, temperatura, otras)'
+      
     ],
   },
-  {
-    id: 'reacciones',
-    label: 'Reacciones de las personas',
-    options: [
-      'No reconoce las recomendaciones',
-      'Reacciona negativamente',
-      'Se muestra indiferente al momento de la observación',
-      'Reconoce y corrige según lo observado',
-    ],
-  },
+  
 ];
