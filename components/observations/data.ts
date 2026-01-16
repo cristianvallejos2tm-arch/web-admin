@@ -58,4 +58,13 @@ export const OBSERVATION_CHECKLIST: ObservationChecklistCategory[] = [
     ],
   },
   
+  {
+    id:'reacciones',
+    label: 'Estado de la tarea',
+    options:[
+      'Se detuvo la tareas',
+      'Situación corregida'
+    ]
+
+  },
 ];
