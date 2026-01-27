@@ -50,6 +50,8 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
         } catch (err) {
             console.error('Error subiendo imagen', err);
         }
+        const operadoraPrincipal = form.operadoras[0] ?? null;
+
         await updateVehiculo(form.id, {
             patente: form.patente,
             modelo: form.modelo || null,
@@ -59,6 +61,19 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
             kilometraje_actual: form.odometro ? Number(form.odometro) : null,
             activo: form.estado !== 'Fuera de Servicio',
             foto_url: fotoUrl,
+            base: form.base || null,
+            sector: form.sector || null,
+            funcion: form.funcion || null,
+            estado: form.estado || null,
+            num_int: form.interno || null,
+            op: operadoraPrincipal,
+            horometro: form.horometro ? Number(form.horometro) : null,
+            tipo_combustible: form.tipoComb || null,
+            consumo_Km: form.consumoKmLt || null,
+            Consumo_100km: form.consumo100 || null,
+            capacidat_Tanque: form.capacidad || null,
+            observaciones: form.observaciones || null,
+            caracteristicas_equipo: form.caracteristicas || null,
         });
         setSaving(false);
         onBack();

@@ -233,21 +233,46 @@ export async function fetchEvaluacionesDesempeno() {
 
 // Vehículos
 // Lista los vehículos ordenados por patente.
-export async function fetchVehiculos() {
-    return supabase.from('vehiculos').select('*').order('patente');
+export async function fetchVehiculos({
+    page,
+    limit,
+}: {
+    page?: number;
+    limit?: number;
+} = {}) {
+    let builder = supabase.from('vehiculos').select('*', { count: 'exact' }).order('patente');
+    if (typeof page === 'number' && typeof limit === 'number') {
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+        builder = builder.range(from, to);
+    }
+    return builder;
 }
 
 
 // Crea un nuevo vehículo con los campos básicos.
 export async function createVehiculo(payload: {
     patente: string;
-    marca?: string;
-    modelo?: string;
+    marca?: string | null;
+    modelo?: string | null;
     anio?: number | null;
     vin?: string | null;
     kilometraje_actual?: number | null;
     activo?: boolean;
     foto_url?: string | null;
+    base?: string | null;
+    sector?: string | null;
+    funcion?: string | null;
+    estado?: string | null;
+    num_int?: string | null;
+    op?: string | null;
+    horometro?: number | null;
+    tipo_combustible?: string | null;
+    consumo_Km?: string | null;
+    Consumo_100km?: string | null;
+    capacidat_Tanque?: string | null;
+    observaciones?: string | null;
+    caracteristicas_equipo?: string | null;
 }) {
     return supabase.from('vehiculos').insert([payload]);
 }
@@ -264,6 +289,19 @@ export async function updateVehiculo(
         kilometraje_actual?: number | null;
         activo?: boolean;
         foto_url?: string | null;
+        base?: string | null;
+        sector?: string | null;
+        funcion?: string | null;
+        estado?: string | null;
+        num_int?: string | null;
+        op?: string | null;
+        horometro?: number | null;
+        tipo_combustible?: string | null;
+        consumo_Km?: string | null;
+        Consumo_100km?: string | null;
+        capacidat_Tanque?: string | null;
+        observaciones?: string | null;
+        caracteristicas_equipo?: string | null;
     }
 ) {
     return supabase.from('vehiculos').update(payload).eq('id', id);
@@ -691,4 +729,3 @@ export async function queueCapacitacionNotifications(
         .from('email_outbox')
         .insert(entries.map((entry) => ({ ...entry, status: 'PENDING' })));
 }
-

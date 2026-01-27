@@ -57,8 +57,10 @@ export const sectorFunciones: Record<string, string[]> = {
     ],
     'TRAILER VIVIENDA': ['SIN DESIGNAR'],
     'TRANSPORTE': ['TRACTOR DOBLE', 'TRACTOR CON HIDRO', 'SEMIPLAYO', 'TTE GASOLINA', 'PERSONAL EJECUTIVO'],
-    VACTOR: ['VACTOR'],
+VACTOR: ['VACTOR'],
 };
+
+const operatorOptions = ['PAE', 'CGC', 'YPF', 'CP', 'VIS'];
 
 // Formulario para registrar nuevos vehículos con datos técnicos, consumo e imagen.
 const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
@@ -83,6 +85,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
         caracteristicas: '',
         observaciones: '',
         foto_url: '',
+        operadoras: [] as string[],
     });
     const [saving, setSaving] = useState(false);
     const [file, setFile] = useState<File | null>(null);
@@ -100,6 +103,8 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
         } catch (err) {
             console.error('Error subiendo imagen', err);
         }
+        const operadoraPrincipal = form.operadoras[0] ?? null;
+
         await createVehiculo({
             patente: form.patente,
             marca: form.marca || null,
@@ -109,9 +114,34 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
             kilometraje_actual: form.odometro ? Number(form.odometro) : null,
             activo: form.estado !== 'Fuera de Servicio',
             foto_url: fotoUrl,
+            base: form.base || null,
+            sector: form.sector || null,
+            funcion: form.funcion || null,
+            estado: form.estado || null,
+            num_int: form.interno || null,
+            op: operadoraPrincipal,
+            horometro: form.horometro ? Number(form.horometro) : null,
+            tipo_combustible: form.tipoComb || null,
+            consumo_Km: form.consumoKmLt || null,
+            Consumo_100km: form.consumo100 || null,
+            capacidat_Tanque: form.capacidad || null,
+            observaciones: form.observaciones || null,
+            caracteristicas_equipo: form.caracteristicas || null,
         });
         setSaving(false);
         onBack();
+    };
+
+    const toggleOperadora = (value: string) => {
+        setForm((prev) => {
+            const exists = prev.operadoras.includes(value);
+            return {
+                ...prev,
+                operadoras: exists
+                    ? prev.operadoras.filter((op) => op !== value)
+                    : [...prev.operadoras, value],
+            };
+        });
     };
 
     return (
@@ -235,9 +265,9 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-semibold text-slate-600">Sector</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-600">Sector</label>
                                 <select
                                     value={form.sector}
                                     onChange={(e) => {
@@ -248,9 +278,9 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
                                             sector,
                                             funcion: funciones.length ? funciones[0] : sector,
                                         });
-                                    }}
-                                    className="w-full h-10 px-3 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
-                                >
+                               }}
+                                className="w-full h-10 px-3 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
+                            >
                                     <option value="">Seleccionar</option>
                                     {Object.keys(sectorFunciones).map((sector) => (
                                         <option key={sector} value={sector}>
@@ -293,13 +323,36 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
                                         </option>
                                     ))}
                                 </select>
-                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div>
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <Settings size={16} className="text-slate-400" />
+                    Operadoras
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {operatorOptions.map((op) => (
+                        <label
+                            key={op}
+                            className="flex items-center gap-2 text-sm text-slate-700 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:border-blue-500"
+                        >
+                            <input
+                                type="checkbox"
+                                checked={form.operadoras.includes(op)}
+                                onChange={() => toggleOperadora(op)}
+                                className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="font-semibold">{op}</span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
                         <Fuel size={16} className="text-slate-400" />
                         Medición y Consumo
                     </h3>
