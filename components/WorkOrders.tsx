@@ -183,8 +183,7 @@ const WorkOrders: React.FC = () => {
                             onChange={(e) => setSearch(e.target.value)}
                             className="pl-3 pr-3 py-2 border rounded"
                         />
-                        <button className="px-3 py-2 bg-cyan-500 text-white rounded">Excel</button>
-                        <button className="px-3 py-2 bg-cyan-400 text-white rounded">Pdf</button>
+                        
                         <div className="flex items-center gap-2">
                             <label className="text-sm text-slate-600">Estado:</label>
                             <select
