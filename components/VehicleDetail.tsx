@@ -112,7 +112,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
                             </div>
                             <div className="flex justify-between py-4 px-6 hover:bg-slate-50/50">
                                 <span className="text-slate-500 text-sm">Chasis:</span>
-                                <span className="text-slate-900 font-medium text-sm">9BSP6X400B3669502</span>
+                                <span className="text-slate-900 font-medium text-sm"></span>
                             </div>
                             <div className="flex justify-between py-4 px-6 hover:bg-slate-50/50">
                                 <span className="text-slate-500 text-sm">Función:</span>

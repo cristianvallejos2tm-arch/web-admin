@@ -363,8 +363,27 @@ export async function updateTask(id: string, payload: { estado?: string; priorid
 
 // Ordenes de trabajo
 // Trae las órdenes de trabajo ordenadas por creación.
-export async function fetchWorkOrders() {
-    return supabase.from('ordenes_trabajo').select('*').order('created_at', { ascending: false });
+export async function fetchWorkOrders({
+    page,
+    limit,
+    estado,
+}: {
+    page?: number;
+    limit?: number;
+    estado?: string;
+} = {}) {
+    const estados = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
+    let builder = supabase
+        .from('ordenes_trabajo')
+        .select('*', { count: 'exact' })
+        .in('estado', estado ? [estado] : estados)
+        .order('created_at', { ascending: false });
+    if (typeof page === 'number' && typeof limit === 'number') {
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+        builder = builder.range(from, to);
+    }
+    return builder;
 }
 
 // Crea una orden de trabajo y devuelve su id.
