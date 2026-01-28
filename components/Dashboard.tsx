@@ -2,21 +2,33 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle, Truck, Activity, CalendarClock, Search, Filter, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import StatCard from './StatCard';
-import { fetchVehiculos, fetchShiftChanges } from '../services/supabase';
+import { fetchVehiculos, fetchShiftChanges, fetchWorkOrdersTotals } from '../services/supabase';
 
 // Dashboard completo: estadísticas de flota y cambios de turno con tabla y gráfico.
 const Dashboard: React.FC = () => {
     const [vehiculos, setVehiculos] = useState<any[]>([]);
     const [shifts, setShifts] = useState<any[]>([]);
+    const [workOrderSummary, setWorkOrderSummary] = useState<{ total: number; finalizadas: number }>({ total: 0, finalizadas: 0 });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-            const [{ data: vData }, { data: sData }] = await Promise.all([fetchVehiculos(), fetchShiftChanges()]);
-            setVehiculos(vData || []);
-            setShifts(sData || []);
-            setLoading(false);
+            try {
+                const [{ data: vData }, { data: sData }, totals] = await Promise.all([
+                    fetchVehiculos(),
+                    fetchShiftChanges(),
+                    fetchWorkOrdersTotals(),
+                ]);
+                setVehiculos(vData || []);
+                setShifts(sData || []);
+                setWorkOrderSummary({
+                    total: totals?.total ?? 0,
+                    finalizadas: totals?.finalizadas ?? 0,
+                });
+            } finally {
+                setLoading(false);
+            }
         };
         load();
     }, []);
@@ -25,6 +37,7 @@ const Dashboard: React.FC = () => {
     const operationalVehicles = vehiculos.filter((v) => v.activo !== false).length;
     const maintenanceVehicles = totalVehicles - operationalVehicles;
     const recentIssues = shifts.length;
+    const activeOrders = Math.max(0, (workOrderSummary.total ?? 0) - (workOrderSummary.finalizadas ?? 0));
 
     const chartData = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -65,11 +78,13 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <StatCard title="Total Flota" value={totalVehicles} icon={Truck} color="blue" />
                 <StatCard title="Operativos" value={operationalVehicles} icon={CheckCircle} color="green" trendUp trend="-" />
                 <StatCard title="En Mantenimiento" value={maintenanceVehicles} icon={AlertTriangle} color="amber" trendUp={false} trend="-" />
                 <StatCard title="Cambios de turno" value={recentIssues} icon={Activity} color="red" />
+                <StatCard title="Órdenes finalizadas" value={workOrderSummary.finalizadas} icon={CheckCircle} color="purple" />
+                <StatCard title="Órdenes activas" value={activeOrders} icon={Activity} color="teal" />
             </div>
 
             {/* Main content */}

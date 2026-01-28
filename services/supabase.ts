@@ -386,6 +386,21 @@ export async function fetchWorkOrders({
     return builder;
 }
 
+// Resumen de órdenes para dashboard (total + finalizadas).
+export async function fetchWorkOrdersTotals() {
+    const totalPromise = supabase.from('ordenes_trabajo').select('id', { count: 'exact', head: true });
+    const finalizadasPromise = supabase
+        .from('ordenes_trabajo')
+        .select('id', { count: 'exact', head: true })
+        .in('estado', ['cerrada', 'cancelada']);
+
+    const [totalResult, finalResult] = await Promise.all([totalPromise, finalizadasPromise]);
+    return {
+        total: totalResult.count ?? 0,
+        finalizadas: finalResult.count ?? 0,
+    };
+}
+
 // Crea una orden de trabajo y devuelve su id.
 export async function createWorkOrder(payload: {
     numero?: string | null;
