@@ -392,12 +392,33 @@ export async function fetchWorkOrdersTotals() {
     const finalizadasPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
-        .in('estado', ['cerrada', 'cancelada']);
+        .in('estado', ['cerrada', 'Cerrada']);
+    const sinIniciarPromise = supabase
+        .from('ordenes_trabajo')
+        .select('id', { count: 'exact', head: true })
+        .eq('estado', 'abierta');
+    const enCursoPromise = supabase
+        .from('ordenes_trabajo')
+        .select('id', { count: 'exact', head: true })
+        .in('estado', ['en_progreso', 'pausada', 'confirmada']);
+    const vencidasPromise = supabase
+        .from('ordenes_trabajo')
+        .select('id', { count: 'exact', head: true })
+        .in('estado', ['vencido', 'Vencido']);
 
-    const [totalResult, finalResult] = await Promise.all([totalPromise, finalizadasPromise]);
+    const [totalResult, finalResult, sinIniciarResult, enCursoResult, vencidasResult] = await Promise.all([
+        totalPromise,
+        finalizadasPromise,
+        sinIniciarPromise,
+        enCursoPromise,
+        vencidasPromise,
+    ]);
     return {
         total: totalResult.count ?? 0,
         finalizadas: finalResult.count ?? 0,
+        sinIniciar: sinIniciarResult.count ?? 0,
+        enCurso: enCursoResult.count ?? 0,
+        vencidas: vencidasResult.count ?? 0,
     };
 }
 

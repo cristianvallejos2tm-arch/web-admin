@@ -8,7 +8,13 @@ import { fetchVehiculos, fetchShiftChanges, fetchWorkOrdersTotals } from '../ser
 const Dashboard: React.FC = () => {
     const [vehiculos, setVehiculos] = useState<any[]>([]);
     const [shifts, setShifts] = useState<any[]>([]);
-    const [workOrderSummary, setWorkOrderSummary] = useState<{ total: number; finalizadas: number }>({ total: 0, finalizadas: 0 });
+    const [workOrderSummary, setWorkOrderSummary] = useState<{
+        total: number;
+        finalizadas: number;
+        sinIniciar: number;
+        enCurso: number;
+        vencidas: number;
+    }>({ total: 0, finalizadas: 0, sinIniciar: 0, enCurso: 0, vencidas: 0 });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -25,6 +31,18 @@ const Dashboard: React.FC = () => {
                 setWorkOrderSummary({
                     total: totals?.total ?? 0,
                     finalizadas: totals?.finalizadas ?? 0,
+                    sinIniciar: totals?.sinIniciar ?? 0,
+                    enCurso: totals?.enCurso ?? 0,
+                    vencidas: totals?.vencidas ?? 0,
+                });
+            } catch (error) {
+                console.error('Error fetching dashboard stats', error);
+                setWorkOrderSummary({
+                    total: 0,
+                    finalizadas: 0,
+                    sinIniciar: 0,
+                    enCurso: 0,
+                    vencidas: 0,
                 });
             } finally {
                 setLoading(false);
@@ -37,7 +55,6 @@ const Dashboard: React.FC = () => {
     const operationalVehicles = vehiculos.filter((v) => v.activo !== false).length;
     const maintenanceVehicles = totalVehicles - operationalVehicles;
     const recentIssues = shifts.length;
-    const activeOrders = Math.max(0, (workOrderSummary.total ?? 0) - (workOrderSummary.finalizadas ?? 0));
 
     const chartData = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -83,8 +100,50 @@ const Dashboard: React.FC = () => {
                 <StatCard title="Operativos" value={operationalVehicles} icon={CheckCircle} color="green" trendUp trend="-" />
                 <StatCard title="En Mantenimiento" value={maintenanceVehicles} icon={AlertTriangle} color="amber" trendUp={false} trend="-" />
                 <StatCard title="Cambios de turno" value={recentIssues} icon={Activity} color="red" />
-                <StatCard title="Órdenes finalizadas" value={workOrderSummary.finalizadas} icon={CheckCircle} color="purple" />
-                <StatCard title="Órdenes activas" value={activeOrders} icon={Activity} color="teal" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[{
+                    label: 'O.T. Totales',
+                    value: workOrderSummary.total,
+                    icon: CheckCircle,
+                    color: 'blue',
+                    progressColor: '#38bdf8',
+                    progress: 100,
+                }, {
+                    label: 'O.T. Finalizadas',
+                    value: workOrderSummary.finalizadas,
+                    icon: CheckCircle,
+                    color: 'green',
+                    progressColor: '#34d399',
+                    progress: workOrderSummary.total ? (workOrderSummary.finalizadas / Math.max(1, workOrderSummary.total ?? 0)) * 100 : 0,
+                }, {
+                    label: 'O.T. Sin iniciar',
+                    value: workOrderSummary.sinIniciar,
+                    icon: Truck,
+                    color: 'amber',
+                    progressColor: '#facc15',
+                    progress: workOrderSummary.total ? (workOrderSummary.sinIniciar / Math.max(1, workOrderSummary.total ?? 0)) * 100 : 0,
+                }, {
+                    label: 'O.T. Canceladas',
+                    value: workOrderSummary.vencidas,
+                    icon: AlertTriangle,
+                    color: 'red',
+                    progressColor: '#f43f5e',
+                    progress: workOrderSummary.total ? (workOrderSummary.vencidas / Math.max(1, workOrderSummary.total ?? 0)) * 100 : 0,
+                }].map((stat) => (
+                    <div key={stat.label} className="space-y-2">
+                        <StatCard title={stat.label} value={stat.value} icon={stat.icon} color={stat.color} subtitle="" />
+                        <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                                className="h-1 rounded-full"
+                                style={{
+                                    width: `${Math.max(0, Math.min(100, stat.progress))}%`,
+                                    background: stat.progressColor,
+                                }}
+                            />
+                        </div>
+                    </div>
+                ))}
             </div>
 
             {/* Main content */}
