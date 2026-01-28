@@ -4,16 +4,20 @@ import WorkOrderForm from "./WorkOrderForm";
 import WorkOrderStats from "./WorkOrderStats";
 import { fetchWorkOrders, fetchVehiculos, fetchUsuariosLite, updateWorkOrder } from "../services/supabase";
 
-const ESTADOS_PERMITIDOS = ["abierta", "en_progreso", "pausada", "confirmada", "cancelada", "vencido"];
+const ESTADOS_PENDIENTES = ["abierta", "en_progreso", "pausada", "confirmada", "vencido"];
+const ESTADOS_FINALIZADAS = ["cerrada", "cancelada"];
 
 const WorkOrders: React.FC = () => {
-    const [view, setView] = useState<"list" | "new" | "stats">("list");
+    const [view, setView] = useState<"pendientes" | "finalizadas" | "new" | "stats">("pendientes");
     const [rowsPerPage, setRowsPerPage] = useState(50);
-    const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
     const [estadoFilter, setEstadoFilter] = useState("");
-    const [orders, setOrders] = useState<any[]>([]);
-    const [totalCount, setTotalCount] = useState(0);
+    const [pendingOrders, setPendingOrders] = useState<any[]>([]);
+    const [pendingTotal, setPendingTotal] = useState(0);
+    const [pendingPage, setPendingPage] = useState(1);
+    const [finalOrders, setFinalOrders] = useState<any[]>([]);
+    const [finalTotal, setFinalTotal] = useState(0);
+    const [finalPage, setFinalPage] = useState(1);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [selected, setSelected] = useState<any | null>(null);
@@ -21,9 +25,19 @@ const WorkOrders: React.FC = () => {
     const [usuarios, setUsuarios] = useState<any[]>([]);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-    const loadOrders = async (pageNumber = 1, limit = rowsPerPage, estado?: string) => {
+    const loadOrders = async ({
+        estados,
+        pageNumber,
+        limit = rowsPerPage,
+        target,
+    }: {
+        estados: string[];
+        pageNumber: number;
+        limit?: number;
+        target: "pendientes" | "finalizadas";
+    }) => {
         setLoading(true);
-        const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estado });
+        const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estados });
         setLoading(false);
         if (error) {
             console.error("Error cargando OTs", error);
@@ -31,9 +45,15 @@ const WorkOrders: React.FC = () => {
             return;
         }
         setErrorMsg(null);
-        setOrders(data || []);
-        setTotalCount(count ?? 0);
-        setPage(pageNumber);
+        if (target === "pendientes") {
+            setPendingOrders(data || []);
+            setPendingTotal(count ?? 0);
+            setPendingPage(pageNumber);
+        } else {
+            setFinalOrders(data || []);
+            setFinalTotal(count ?? 0);
+            setFinalPage(pageNumber);
+        }
     };
 
     const loadCatalogs = async () => {
@@ -43,13 +63,19 @@ const WorkOrders: React.FC = () => {
     };
 
     useEffect(() => {
-        loadOrders(1, rowsPerPage, estadoFilter || undefined);
+        loadOrders({ estados: ESTADOS_PENDIENTES, pageNumber: 1, target: "pendientes" });
+        loadOrders({ estados: ESTADOS_FINALIZADAS, pageNumber: 1, target: "finalizadas" });
         loadCatalogs();
     }, []);
 
+    const currentOrders = view === "pendientes" ? pendingOrders : finalOrders;
+    const currentTotal = view === "pendientes" ? pendingTotal : finalTotal;
+    const currentPage = view === "pendientes" ? pendingPage : finalPage;
+    const estadosActivos = view === "pendientes" ? ESTADOS_PENDIENTES : ESTADOS_FINALIZADAS;
+
     const filtered = useMemo(() => {
         const term = search.toLowerCase();
-        return orders.filter((o) => {
+        return currentOrders.filter((o) => {
             if (!term) return true;
             return (
                 (o.numero || "").toLowerCase().includes(term) ||
@@ -57,15 +83,9 @@ const WorkOrders: React.FC = () => {
                 (o.descripcion || "").toLowerCase().includes(term)
             );
         });
-    }, [orders, search]);
+    }, [currentOrders, search]);
 
-    useEffect(() => {
-        const term = search.toLowerCase();
-        if (!term) return;
-        setErrorMsg(`Filtro aplicado: "${search}". Mostrando ${filtered.length} registros.`);
-    }, [filtered.length, search]);
-
-    const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
+    const totalPages = Math.max(1, Math.ceil(currentTotal / rowsPerPage));
 
     const vehiculoLabel = (id?: string | null) => {
         if (!id) return "—";
@@ -90,7 +110,12 @@ const WorkOrders: React.FC = () => {
             setErrorMsg('No se pudo actualizar el estado. Revisa políticas de actualización en "ordenes_trabajo".');
             return;
         }
-        loadOrders(page, rowsPerPage);
+        loadOrders({
+            estados: view === "pendientes" ? ESTADOS_PENDIENTES : ESTADOS_FINALIZADAS,
+            pageNumber: currentPage,
+            target: view,
+            limit: rowsPerPage,
+        });
         if (selected && selected.id === id) {
             setSelected({ ...selected, estado });
         }
@@ -114,28 +139,46 @@ const WorkOrders: React.FC = () => {
     );
 
     if (view === "new") {
-        return <WorkOrderForm onBack={() => { setView("list"); loadOrders(); }} />;
+        return <WorkOrderForm onBack={() => { setView("pendientes"); }} />;
     }
 
     if (view === "stats") {
-        return <WorkOrderStats onBack={() => setView("list")} orders={orders} />;
+        return <WorkOrderStats onBack={() => setView("pendientes")} orders={orders} />;
     }
 
     const handlePageChange = (newPage: number) => {
-        loadOrders(newPage, rowsPerPage, estadoFilter || undefined);
+        loadOrders({
+            estados: view === "pendientes" ? ESTADOS_PENDIENTES : ESTADOS_FINALIZADAS,
+            pageNumber: newPage,
+            limit: rowsPerPage,
+            target: view,
+        });
     };
 
     const handleRowsPerPageChange = (limit: number) => {
         setRowsPerPage(limit);
-        loadOrders(1, limit, estadoFilter || undefined);
+        loadOrders({
+            estados: view === "pendientes" ? ESTADOS_PENDIENTES : ESTADOS_FINALIZADAS,
+            pageNumber: 1,
+            limit,
+            target: view,
+        });
+    };
+
+    const handleEstadoFilterChange = (estado: string) => {
+        setEstadoFilter(estado);
+        loadOrders({
+            estados: estado ? [estado] : ESTADOS_PENDIENTES,
+            pageNumber: 1,
+            target: "pendientes",
+            limit: rowsPerPage,
+        });
     };
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Orden de trabajo</h1>
-                </div>
+                <h1 className="text-2xl font-bold text-slate-900">Orden de trabajo</h1>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setView("new")}
@@ -143,6 +186,18 @@ const WorkOrders: React.FC = () => {
                     >
                         <Plus size={16} />
                         Agregar Nueva
+                    </button>
+                    <button
+                        onClick={() => setView("pendientes")}
+                        className={`flex items-center gap-2 px-4 py-2 ${view === "pendientes" ? "bg-white border" : "bg-sky-50 border"} rounded-lg text-slate-700`}
+                    >
+                        Pendientes
+                    </button>
+                    <button
+                        onClick={() => setView("finalizadas")}
+                        className={`flex items-center gap-2 px-4 py-2 ${view === "finalizadas" ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-700"} rounded-lg`}
+                    >
+                        Ver finalizadas
                     </button>
                     <button
                         onClick={() => setView("stats")}
@@ -155,13 +210,12 @@ const WorkOrders: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">LISTADO PENDIENTES</h3>
                 <div className="flex items-center justify-between mb-4 text-xs text-slate-500">
                     <span>
-                        Mostrando {filtered.length} registros de {totalCount} (estados: {ESTADOS_PERMITIDOS.join(", ")}).
+                        Mostrando {filtered.length} registros de {currentTotal} ({view === "pendientes" ? "activos" : "finalizados"}).
                     </span>
                 </div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
                         <label className="text-sm text-slate-600">Mostrar</label>
                         <select
@@ -183,40 +237,30 @@ const WorkOrders: React.FC = () => {
                             onChange={(e) => setSearch(e.target.value)}
                             className="pl-3 pr-3 py-2 border rounded"
                         />
-                        
+                    </div>
+                    {view === "pendientes" && (
                         <div className="flex items-center gap-2">
                             <label className="text-sm text-slate-600">Estado:</label>
                             <select
                                 value={estadoFilter}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setEstadoFilter(value);
-                                    loadOrders(1, rowsPerPage, value || undefined);
-                                }}
+                                onChange={(e) => handleEstadoFilterChange(e.target.value)}
                                 className="px-2 py-1 border rounded"
                             >
                                 <option value="">Todos</option>
-                                {[
-                                    "abierta",
-                                    "en_progreso",
-                                    "pausada",
-                                    "confirmada",
-                                    "cerrada",
-                                    "cancelada",
-                                    "vencido",
-                                ].map((estado) => (
+                                {ESTADOS_PENDIENTES.map((estado) => (
                                     <option key={estado} value={estado}>
                                         {estado.replace("_", " ")}
                                     </option>
                                 ))}
                             </select>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {errorMsg && (
                     <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-3 text-sm">{errorMsg}</div>
                 )}
+
                 {loading ? (
                     <div className="flex items-center gap-2 text-slate-500 text-sm">
                         <Loader2 className="animate-spin" size={16} /> Cargando...
@@ -271,12 +315,12 @@ const WorkOrders: React.FC = () => {
 
                 <div className="flex flex-col gap-2 mt-4 text-xs text-slate-500">
                     <span>
-                        Página {page} de {totalPages} ({totalCount} registros)
+                        Página {currentPage} de {totalPages} ({currentTotal} registros)
                     </span>
                     <div className="flex flex-wrap items-center gap-1 overflow-x-auto">
                         <button
-                            onClick={() => handlePageChange(Math.max(1, page - 1))}
-                            disabled={page <= 1}
+                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                            disabled={currentPage <= 1}
                             className="px-3 py-1 border rounded"
                         >
                             Anterior
@@ -285,14 +329,14 @@ const WorkOrders: React.FC = () => {
                             <button
                                 key={i}
                                 onClick={() => handlePageChange(i + 1)}
-                                className={`px-3 py-1 border rounded ${page === i + 1 ? "bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
+                                className={`px-3 py-1 border rounded ${currentPage === i + 1 ? "bg-slate-900 text-white" : "border-slate-200 text-slate-600"}`}
                             >
                                 {i + 1}
                             </button>
                         ))}
                         <button
-                            onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
-                            disabled={page >= totalPages}
+                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage >= totalPages}
                             className="px-3 py-1 border rounded"
                         >
                             Siguiente

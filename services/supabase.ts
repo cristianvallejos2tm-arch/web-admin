@@ -366,17 +366,17 @@ export async function updateTask(id: string, payload: { estado?: string; priorid
 export async function fetchWorkOrders({
     page,
     limit,
-    estado,
+    estados,
 }: {
     page?: number;
     limit?: number;
-    estado?: string;
+    estados?: string[];
 } = {}) {
-    const estados = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
+    const defaultEstados = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
     let builder = supabase
         .from('ordenes_trabajo')
         .select('*', { count: 'exact' })
-        .in('estado', estado ? [estado] : estados)
+        .in('estado', estados && estados.length ? estados : defaultEstados)
         .order('created_at', { ascending: false });
     if (typeof page === 'number' && typeof limit === 'number') {
         const from = (page - 1) * limit;
