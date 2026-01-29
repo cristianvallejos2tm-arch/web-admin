@@ -271,9 +271,10 @@ const WorkOrders: React.FC = () => {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
+                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Prioridad</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Estado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Tipo</th>
@@ -287,6 +288,9 @@ const WorkOrders: React.FC = () => {
                                         <td className="px-4 py-2 text-slate-900">{t.numero || "—"}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
                                             {t.fecha_inicio ? new Date(t.fecha_inicio).toLocaleDateString() : "—"}
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs">
+                                            {t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}
                                         </td>
                                         <td className="px-4 py-2">
                                             <span className="px-2 py-1 text-xs font-semibold rounded text-white bg-red-500">

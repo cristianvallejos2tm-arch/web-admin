@@ -124,7 +124,7 @@ const Dashboard: React.FC = () => {
                     progressColor: '#facc15',
                     progress: workOrderSummary.total ? (workOrderSummary.sinIniciar / Math.max(1, workOrderSummary.total ?? 0)) * 100 : 0,
                 }, {
-                    label: 'O.T. Canceladas',
+                    label: 'O.T. Vencidas',
                     value: workOrderSummary.vencidas,
                     icon: AlertTriangle,
                     color: 'red',

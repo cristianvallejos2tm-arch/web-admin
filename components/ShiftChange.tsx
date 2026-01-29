@@ -207,12 +207,7 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="px-3 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
                         />
-                        <button className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors">
-                            Excel
-                        </button>
-                        <button className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors">
-                            Pdf
-                        </button>
+                       
                     </div>
                 </div>
 

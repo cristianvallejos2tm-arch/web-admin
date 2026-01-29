@@ -397,7 +397,7 @@ export async function fetchWorkOrdersTotals() {
     const sinIniciarPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
-        .in('estado', ['pausada']);
+        .in('estado', ['pausada', 'abierta']);
     const enCursoPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
