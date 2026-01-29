@@ -387,20 +387,21 @@ export async function fetchWorkOrders({
 }
 
 // Resumen de órdenes para dashboard (total + finalizadas).
+
 export async function fetchWorkOrdersTotals() {
     const totalPromise = supabase.from('ordenes_trabajo').select('id', { count: 'exact', head: true });
     const finalizadasPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
-        .in('estado', ['cerrada', 'Cerrada']);
+        .in('estado', ['cerrada', 'cancelada']);
     const sinIniciarPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
-        .eq('estado', 'abierta');
+        .in('estado', ['pausada']);
     const enCursoPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
-        .in('estado', ['en_progreso', 'pausada', 'confirmada']);
+        .in('estado', ['en_progreso', 'confirmada']);
     const vencidasPromise = supabase
         .from('ordenes_trabajo')
         .select('id', { count: 'exact', head: true })
