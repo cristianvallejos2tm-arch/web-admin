@@ -91,17 +91,23 @@ const computeChecklistRules = (selectedVehicle: any) => {
   };
 };
 
-// Remolque (solo si allowArrastre)
-const REMOLQUE_OPCIONES = [
-  { value: '', label: 'No remolca' },
-  { value: 'Semiplayo (CS)', label: 'Semiplayo (CS)' },
-  { value: 'Trailer', label: 'Trailer' },
-  { value: 'Carretón', label: 'Carretón' },
-  { value: 'Compresor', label: 'Compresor' },
-  { value: 'Generador', label: 'Generador' },
-  { value: 'Bomba / Skid', label: 'Bomba / Skid' },
-  { value: 'Otro', label: 'Otro' },
-];
+const mergeChecklistRules = (
+  vehicleRules: ReturnType<typeof computeChecklistRules> | null,
+  trailerRules: ReturnType<typeof computeChecklistRules> | null
+) => {
+  return {
+    generalOnly: !!vehicleRules?.generalOnly,
+    showVacuumPump: !!vehicleRules?.showVacuumPump || !!trailerRules?.showVacuumPump,
+    showVactor: !!vehicleRules?.showVactor || !!trailerRules?.showVactor,
+    showPortaContenedores:
+      !!vehicleRules?.showPortaContenedores || !!trailerRules?.showPortaContenedores,
+    showHidrogrua: !!vehicleRules?.showHidrogrua || !!trailerRules?.showHidrogrua,
+    showMotobombaPozoHO:
+      !!vehicleRules?.showMotobombaPozoHO || !!trailerRules?.showMotobombaPozoHO,
+    showCargasSolidas: !!vehicleRules?.showCargasSolidas || !!trailerRules?.showCargasSolidas,
+    allowArrastre: !!vehicleRules?.allowArrastre,
+  };
+};
 
 const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) => {
   // Form State
@@ -119,10 +125,9 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   const [saving, setSaving] = useState(false);
   const [vehicleSearch, setVehicleSearch] = useState('');
 
-  // Remolque State
-  const [remolqueEquipo, setRemolqueEquipo] = useState<string>('');
-  const [remolqueDesc, setRemolqueDesc] = useState<string>('');
-  const [remolqueId, setRemolqueId] = useState<string>('');
+  // Remolque / arrastre de flota
+  const [trailer, setTrailer] = useState('');
+  const [trailerSearch, setTrailerSearch] = useState('');
 
   // Checklist State
   const [sections, setSections] = useState<ChecklistSection[]>([
@@ -217,11 +222,11 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       ],
     },
     {
-      title: 'Hidrogrúa',
+      title: 'Hidrogr\u00faa',
       items: [
         { id: 51, item: 'Estado de Comandos/Señalética', status: 'No Aplica' },
         { id: 52, item: 'Estado de Mangueras y Estabilizadores', status: 'No Aplica' },
-        { id: 53, item: 'Funcionamiento general de la Hidrogrúa', status: 'No Aplica' },
+        { id: 53, item: 'Funcionamiento general de la Hidrogr\u00faa', status: 'No Aplica' },
         { id: 54, item: 'Niveles de Aceites', status: 'No Aplica' },
         { id: 55, item: 'Pérdidas', status: 'No Aplica' },
       ],
@@ -333,27 +338,58 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     if (userName) setDriver(userName);
   }, [userName]);
 
+  useEffect(() => {
+    const now = new Date();
+    setDate(now.toISOString().slice(0, 10));
+    setHour(now.getHours().toString().padStart(2, '0'));
+    setMinute(now.getMinutes().toString().padStart(2, '0'));
+  }, []);
+
   const selectedVehicle = useMemo(() => {
     if (!vehicle) return null;
     return vehiculos.find((v) => v.patente === vehicle || v.id === vehicle) || null;
   }, [vehicle, vehiculos]);
 
-  const checklistRules = useMemo(() => computeChecklistRules(selectedVehicle), [selectedVehicle]);
+  const vehicleRules = useMemo(() => computeChecklistRules(selectedVehicle), [selectedVehicle]);
+
+  const selectedTrailer = useMemo(() => {
+    if (!trailer) return null;
+    return vehiculos.find((v) => v.id === trailer) || null;
+  }, [trailer, vehiculos]);
+
+  const trailerRules = useMemo(() => computeChecklistRules(selectedTrailer), [selectedTrailer]);
+  const mergedRules = useMemo(() => mergeChecklistRules(vehicleRules, trailerRules), [vehicleRules, trailerRules]);
 
   // Reset remolque si el vehículo no permite arrastre
   useEffect(() => {
-    if (!checklistRules?.allowArrastre) {
-      setRemolqueEquipo('');
-      setRemolqueDesc('');
-      setRemolqueId('');
+    if (!vehicleRules?.allowArrastre) {
+      setTrailer('');
+      setTrailerSearch('');
     }
-  }, [checklistRules?.allowArrastre, selectedVehicle?.id]);
+  }, [vehicleRules?.allowArrastre]);
+
+  useEffect(() => {
+    if (selectedTrailer?.id && selectedVehicle?.id && selectedTrailer.id === selectedVehicle.id) {
+      setTrailer('');
+    }
+  }, [selectedTrailer?.id, selectedVehicle?.id]);
 
   const filteredVehicles = useMemo(() => {
     const term = vehicleSearch.trim();
     if (!term) return vehiculos;
     return vehiculos.filter((v) => (v.num_int || '').toLowerCase().includes(term.toLowerCase()));
   }, [vehiculos, vehicleSearch]);
+
+  const filteredTrailers = useMemo(() => {
+    if (!vehicleRules?.allowArrastre) return [];
+    const term = trailerSearch.trim().toLowerCase();
+    return vehiculos
+      .filter((v) => v.id !== selectedVehicle?.id)
+      .filter((v) => {
+        if (!term) return true;
+        return (v.num_int || '').toLowerCase().includes(term);
+      });
+  }, [vehiculos, trailerSearch, selectedVehicle?.id, vehicleRules?.allowArrastre]);
 
   useEffect(() => {
     const term = vehicleSearch.trim().toLowerCase();
@@ -366,20 +402,19 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 
   const visibleSections = useMemo(() => {
     if (!selectedVehicle) return sections;
-
-    if (checklistRules.generalOnly) {
+    if (mergedRules.generalOnly) {
       return sections.filter((section) => GENERAL_TITLES.includes(section.title));
     }
 
     return sections.filter((section) => {
-      if (!checklistRules.showVacuumPump && section.title === 'Control Bomba Vacio') return false;
-      if (!checklistRules.showHidrogrua && section.title === 'Hidrogrúa') return false;
-      if (!checklistRules.showMotobombaPozoHO && section.title === 'Motobomba y control de pozo') return false;
-      if (!checklistRules.showPortaContenedores && section.title === 'Porta Contenedores') return false;
-      if (!checklistRules.showVactor && section.title === 'Vactor') return false;
+      if (!mergedRules.showVacuumPump && section.title === 'Control Bomba Vacio') return false;
+    if (!mergedRules.showHidrogrua && section.title === 'Hidrogr\u00faa') return false;
+      if (!mergedRules.showMotobombaPozoHO && section.title === 'Motobomba y control de pozo') return false;
+      if (!mergedRules.showPortaContenedores && section.title === 'Porta Contenedores') return false;
+      if (!mergedRules.showVactor && section.title === 'Vactor') return false;
       return true;
     });
-  }, [sections, checklistRules, selectedVehicle]);
+  }, [sections, mergedRules, selectedVehicle]);
 
   const handleChecklistChange = (sectionIndex: number, itemId: number, newStatus: string) => {
     setSections((prevSections) => {
@@ -401,24 +436,26 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     setSaving(true);
 
     const inicio = buildDateTime() || new Date().toISOString();
-    const allowArrastre = !!checklistRules?.allowArrastre;
 
-    const remolqueObj = allowArrastre
+    const trailerSnapshot = selectedTrailer
       ? {
-          enabled: remolqueEquipo !== '',
-          equipo: remolqueEquipo !== '' ? remolqueEquipo : null,
-          descripcion: remolqueEquipo === 'Otro' ? (remolqueDesc || null) : null,
-          identificacion: remolqueEquipo !== '' ? (remolqueId || null) : null,
+          id: selectedTrailer.id,
+          patente: selectedTrailer.patente,
+          num_int: selectedTrailer.num_int,
+          funcion: selectedTrailer.funcion,
+          sector: selectedTrailer.sector,
+          caracteristicas_equipo: selectedTrailer.caracteristicas_equipo,
+          marca: selectedTrailer.marca,
+          modelo: selectedTrailer.modelo,
         }
       : null;
 
-    const remolqueText = !allowArrastre
-      ? ''
-      : remolqueObj?.enabled
-        ? ` | Remolque: SI (${remolqueObj.equipo}${
-            remolqueObj.descripcion ? `: ${remolqueObj.descripcion}` : ''
-          }${remolqueObj.identificacion ? ` - ${remolqueObj.identificacion}` : ''})`
-        : ' | Remolque: NO';
+    const trailerSummaryParts: string[] = [];
+    if (selectedTrailer?.patente) trailerSummaryParts.push(selectedTrailer.patente);
+    if (selectedTrailer?.num_int) trailerSummaryParts.push(`Interno ${selectedTrailer.num_int}`);
+    if (selectedTrailer?.modelo) trailerSummaryParts.push(selectedTrailer.modelo);
+    const trailerSummary = trailerSummaryParts.join(' / ');
+    const remolqueText = trailerSummary ? ` | Remolque: ${trailerSummary}` : '';
 
     const resumen = `Chofer: ${driver || ''} | Vehículo: ${vehicle || ''} | Km: ${km || ''} | Hs: ${
       hs || ''
@@ -437,12 +474,24 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
         }
       : null;
 
+    const remolqueLegacy = {
+      enabled: !!selectedTrailer,
+      equipo: trailerSummary || null,
+      descripcion: selectedTrailer?.caracteristicas_equipo || selectedTrailer?.modelo || null,
+      identificacion: selectedTrailer?.id || selectedTrailer?.patente || null,
+    };
+
     const novedades = {
       checklist_full: sections,
       checklist_visible: visibleSections,
-      rules: checklistRules,
+      rules_vehicle: vehicleRules,
+      rules_trailer: trailerRules,
+      rules_merged: mergedRules,
       vehiculo_snapshot,
-      remolque: remolqueObj,
+      trailer_snapshot: trailerSnapshot,
+      trailer_id: selectedTrailer?.id ?? null,
+      trailer_patente: selectedTrailer?.patente ?? null,
+      ...(selectedTrailer ? { remolque: remolqueLegacy } : {}),
     };
 
     const { error } = await createShiftChange({
@@ -487,13 +536,13 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="flex-grow px-3 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled
+                className="flex-grow px-3 py-2 border border-slate-300 rounded text-slate-600 bg-slate-100 cursor-not-allowed"
               />
               <select
                 value={hour}
-                onChange={(e) => setHour(e.target.value)}
-                className="w-20 px-1 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled
+                className="w-20 px-1 py-2 border border-slate-300 rounded text-slate-600 bg-slate-100 cursor-not-allowed"
               >
                 <option value="">Hs.</option>
                 {Array.from({ length: 24 }).map((_, i) => (
@@ -504,8 +553,8 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
               </select>
               <select
                 value={minute}
-                onChange={(e) => setMinute(e.target.value)}
-                className="w-20 px-1 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled
+                className="w-20 px-1 py-2 border border-slate-300 rounded text-slate-600 bg-slate-100 cursor-not-allowed"
               >
                 <option value="">Min.</option>
                 {Array.from({ length: 60 }).map((_, i) => (
@@ -515,6 +564,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
                 ))}
               </select>
             </div>
+            <p className="text-xs text-slate-500">Se registra automáticamente la fecha y hora actual.</p>
           </div>
 
           {/* Chofer */}
@@ -554,41 +604,32 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
             </select>
           </div>
 
-          {/* Remolque (solo si allowArrastre) */}
-          {selectedVehicle && checklistRules.allowArrastre && (
+          {/* Equipo remolcado / arrastre */}
+          {selectedVehicle && vehicleRules.allowArrastre && (
             <div className="space-y-2">
-              <label className="block text-sm font-bold text-slate-700">Remolque</label>
+              <label className="block text-sm font-bold text-slate-700">Equipo remolcado / arrastre</label>
 
+             
               <select
-                value={remolqueEquipo}
-                onChange={(e) => setRemolqueEquipo(e.target.value)}
+                value={trailer}
+                onChange={(e) => setTrailer(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {REMOLQUE_OPCIONES.map((op) => (
-                  <option key={op.value} value={op.value}>
-                    {op.label}
+                <option value="">Ninguno / No remolca</option>
+                {filteredTrailers.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.patente} {v.marca ? `- ${v.marca}` : ''} {v.modelo ? `(${v.modelo})` : ''}{' '}
+                    {v.num_int ? `| Interno ${v.num_int}` : ''}
                   </option>
                 ))}
               </select>
 
-              {remolqueEquipo === 'Otro' && (
-                <input
-                  type="text"
-                  value={remolqueDesc}
-                  onChange={(e) => setRemolqueDesc(e.target.value)}
-                  placeholder="Descripción del equipo (otro)"
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              )}
-
-              {remolqueEquipo !== '' && (
-                <input
-                  type="text"
-                  value={remolqueId}
-                  onChange={(e) => setRemolqueId(e.target.value)}
-                  placeholder="Identificación (patente / interno / serie) (opcional)"
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              {selectedTrailer && (
+                <p className="text-xs text-slate-500">
+                  {selectedTrailer.patente || 'Sin patente'}
+                  {selectedTrailer.num_int ? ` | Int ${selectedTrailer.num_int}` : ''}
+                  {selectedTrailer.modelo ? ` | ${selectedTrailer.modelo}` : ''}
+                </p>
               )}
             </div>
           )}
@@ -637,8 +678,8 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
                   <th className="px-6 py-4 text-left text-sm font-bold w-2/3">
                     {section.title === 'Motobomba y control de pozo'
                       ? 'Control de pozo, Motobomba y HO'
-                      : section.title === 'Cargas Generales' && checklistRules.showCargasSolidas
-                        ? 'Cargas Sólidas'
+                      : section.title === 'Cargas Generales' && mergedRules.showCargasSolidas
+                        ? 'Cargas S\u00f3lidas'
                         : section.title}
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-bold w-1/3">Estado</th>
@@ -696,3 +737,4 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 };
 
 export default ShiftChangeForm;
+
