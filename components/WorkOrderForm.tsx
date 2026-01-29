@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Car, User, AlertCircle, Bookmark, FileText, Calendar, Clock, Save, X } from 'lucide-react';
 import { createExternalPurchaseFromWorkOrder, createWorkOrder, fetchVehiculos, fetchUsuariosLite, fetchProveedoresLite, supabase, uploadWorkOrderBudget } from '../services/supabase';
 
@@ -62,6 +62,22 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         if (origen === 'local') return !!p.es_local || (p.tipo || '').toLowerCase().includes('local');
         return true;
     });
+
+    const [vehiculoInternoSearch, setVehiculoInternoSearch] = useState('');
+    const filteredVehiculos = useMemo(() => {
+        const term = vehiculoInternoSearch.trim();
+        if (!term) return vehiculos;
+        return vehiculos.filter((v) => (v.num_int || '').toLowerCase().includes(term.toLowerCase()));
+    }, [vehiculos, vehiculoInternoSearch]);
+
+    useEffect(() => {
+        const term = vehiculoInternoSearch.trim();
+        if (!term) return;
+        const match = vehiculos.find((v) => (v.num_int || '').toLowerCase() === term.toLowerCase());
+        if (match && form.vehiculoId !== match.id) {
+            setForm((prev) => ({ ...prev, vehiculoId: match.id }));
+        }
+    }, [vehiculoInternoSearch, vehiculos, form.vehiculoId]);
 
     const selectedProveedor = proveedores.find((p) => p.id === form.proveedorId);
     const isExternal = !!selectedProveedor?.es_externo;
@@ -150,21 +166,29 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
 
                 {/* Row 1: Veh�culo & Fuera de Servicio */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="md:col-span-3 space-y-1.5">
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
-                            <Car size={14} className="text-slate-400" />
-                            Seleccione el vehiculo
-                        </label>
-                        <select
-                            value={form.vehiculoId}
+                <div className="md:col-span-3 space-y-1.5">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
+                        <Car size={14} className="text-slate-400" />
+                        Seleccione el vehiculo
+                    </label>
+                    <input
+                        type="text"
+                        value={vehiculoInternoSearch}
+                        onChange={(e) => setVehiculoInternoSearch(e.target.value)}
+                        placeholder="Filtrar por número interno"
+                        className="w-full h-9 px-3 mb-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <select
+                        value={form.vehiculoId}
                             onChange={(e) => setForm({ ...form, vehiculoId: e.target.value })}
                             className="w-full h-11 px-4 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
                         >
                             <option value="">No corresponde</option>
-                            {vehiculos.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                    {v.patente} {v.marca ? `- ${v.marca}` : ''} {v.modelo ? `(${v.modelo})` : ''}
-                                </option>
+                            {filteredVehiculos.map((v) => (
+                            <option key={v.id} value={v.id}>
+                                {v.patente} {v.marca ? `- ${v.marca}` : ''} {v.modelo ? `(${v.modelo})` : ''}{' '}
+                                {v.num_int ? `| Interno ${v.num_int}` : ''}
+                            </option>
                             ))}
                         </select>
                     </div>
