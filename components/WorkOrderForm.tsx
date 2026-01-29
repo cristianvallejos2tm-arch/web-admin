@@ -64,11 +64,18 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
     });
 
     const [vehiculoInternoSearch, setVehiculoInternoSearch] = useState('');
+    const [responsableSearch, setResponsableSearch] = useState('');
     const filteredVehiculos = useMemo(() => {
         const term = vehiculoInternoSearch.trim();
         if (!term) return vehiculos;
         return vehiculos.filter((v) => (v.num_int || '').toLowerCase().includes(term.toLowerCase()));
     }, [vehiculos, vehiculoInternoSearch]);
+
+    const filteredResponsables = useMemo(() => {
+        const term = responsableSearch.trim().toLowerCase();
+        if (!term) return usuarios;
+        return usuarios.filter((u) => `${u.nombre || ''}`.toLowerCase().includes(term));
+    }, [usuarios, responsableSearch]);
 
     useEffect(() => {
         const term = vehiculoInternoSearch.trim();
@@ -78,6 +85,15 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
             setForm((prev) => ({ ...prev, vehiculoId: match.id }));
         }
     }, [vehiculoInternoSearch, vehiculos, form.vehiculoId]);
+
+    useEffect(() => {
+        const term = responsableSearch.trim().toLowerCase();
+        if (!term) return;
+        const match = usuarios.find((u) => (u.nombre || '').toLowerCase().includes(term));
+        if (match && form.responsableId !== match.id) {
+            setForm((prev) => ({ ...prev, responsableId: match.id }));
+        }
+    }, [responsableSearch, usuarios, form.responsableId]);
 
     const selectedProveedor = proveedores.find((p) => p.id === form.proveedorId);
     const isExternal = !!selectedProveedor?.es_externo;
@@ -166,10 +182,10 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
 
                 {/* Row 1: Veh�culo & Fuera de Servicio */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="md:col-span-3 space-y-1.5">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
-                        <Car size={14} className="text-slate-400" />
-                        Seleccione el vehiculo
+                    <div className="md:col-span-3 space-y-1.5">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
+                            <Car size={14} className="text-slate-400" />
+                            Seleccione el vehiculo
                     </label>
                     <input
                         type="text"
@@ -215,13 +231,20 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
                             <User size={14} className="text-slate-400" />
                             Responsable
                         </label>
+                        <input
+                            type="text"
+                            value={responsableSearch}
+                            onChange={(e) => setResponsableSearch(e.target.value)}
+                            placeholder="Filtrar por nombre/apellido"
+                            className="w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
                         <select
                             value={form.responsableId}
                             onChange={(e) => setForm({ ...form, responsableId: e.target.value })}
                             className="w-full h-11 px-4 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
                         >
                             <option value="">Seleccionar</option>
-                            {usuarios.map((u) => (
+                            {filteredResponsables.map((u) => (
                                 <option key={u.id} value={u.id}>{u.nombre || u.email}</option>
                             ))}
                         </select>
