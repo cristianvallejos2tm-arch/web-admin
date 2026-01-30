@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, Droplets, Loader2 } from 'lucide-react';
-import { createLubricantItem, createLubricantSolicitud, fetchLubricantsStock, fetchLubricantSolicitudes } from '../services/supabase';
+import { createLubricantItem, createLubricantSolicitud, fetchLubricantsStock, fetchLubricantSolicitudes, fetchVehiculos } from '../services/supabase';
 
 interface Solicitud {
     id: string;
@@ -47,6 +47,8 @@ const Lubricants: React.FC = () => {
         hora: '',
         minuto: ''
     });
+    const [vehiculos, setVehiculos] = useState<any[]>([]);
+    const [internoSearch, setInternoSearch] = useState('');
     const [stockItems, setStockItems] = useState<any[]>([]);
     const [requests, setRequests] = useState<Solicitud[]>([]);
     const [loadingStock, setLoadingStock] = useState(false);
@@ -100,6 +102,15 @@ const Lubricants: React.FC = () => {
     useEffect(() => {
         loadStock();
         loadRequests();
+        const loadVehicles = async () => {
+            const { data, error } = await fetchVehiculos();
+            if (error) {
+                console.error('Error cargando vehículos', error);
+                return;
+            }
+            setVehiculos(data || []);
+        };
+        loadVehicles();
     }, []);
 
     const filteredRequests = useMemo(() => {
@@ -115,6 +126,16 @@ const Lubricants: React.FC = () => {
             return text.includes(stockSearchTerm.toLowerCase());
         });
     }, [stockItems, stockSearchTerm]);
+
+    const filteredInternos = useMemo(() => {
+        const term = internoSearch.trim().toLowerCase();
+        if (!term) return vehiculos;
+        return vehiculos.filter((v) => {
+            const numInt = (v.num_int || '').toLowerCase();
+            const patente = (v.patente || '').toLowerCase();
+            return numInt.includes(term) || patente.includes(term);
+        });
+    }, [vehiculos, internoSearch]);
 
     const handleIngreso = async () => {
         if (!formData.marca.trim() || !formData.modelo.trim()) {
@@ -407,14 +428,33 @@ const Lubricants: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">¿Para qué interno?</label>
+                                    <input
+                                        type="text"
+                                        value={internoSearch}
+                                        onChange={(e) => setInternoSearch(e.target.value)}
+                                        placeholder="Buscar interno / patente"
+                                        className="w-full mb-2 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600"
+                                    />
                                     <select
                                         value={solicitudData.interno}
                                         onChange={(e) => setSolicitudData({ ...solicitudData, interno: e.target.value })}
                                         className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-600"
                                     >
                                         <option value="">Sin asignar</option>
-                                        <option value="INT-1">INT-1</option>
-                                        <option value="INT-2">INT-2</option>
+                                        {filteredInternos.map((v) => {
+                                            const labelPieces = [];
+                                            if (v.num_int) labelPieces.push(`Int ${v.num_int}`);
+                                            if (v.patente) labelPieces.push(v.patente);
+                                            if (v.marca) labelPieces.push(v.marca);
+                                            if (v.modelo) labelPieces.push(v.modelo);
+                                            const label = labelPieces.join(' | ');
+                                            const value = v.num_int || v.patente || v.id;
+                                            return (
+                                                <option key={v.id} value={value}>
+                                                    {label || 'Interno sin datos'}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                                 <div>
