@@ -127,7 +127,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 
   // Remolque / arrastre de flota
   const [trailer, setTrailer] = useState('');
-  const [trailerSearch, setTrailerSearch] = useState('');
+ 
 
   // Checklist State
   const [sections, setSections] = useState<ChecklistSection[]>([
@@ -364,7 +364,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   useEffect(() => {
     if (!vehicleRules?.allowArrastre) {
       setTrailer('');
-      setTrailerSearch('');
+      
     }
   }, [vehicleRules?.allowArrastre]);
 
@@ -382,14 +382,11 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 
   const filteredTrailers = useMemo(() => {
     if (!vehicleRules?.allowArrastre) return [];
-    const term = trailerSearch.trim().toLowerCase();
+    
     return vehiculos
       .filter((v) => v.id !== selectedVehicle?.id)
-      .filter((v) => {
-        if (!term) return true;
-        return (v.num_int || '').toLowerCase().includes(term);
-      });
-  }, [vehiculos, trailerSearch, selectedVehicle?.id, vehicleRules?.allowArrastre]);
+      
+  }, [vehiculos, selectedVehicle?.id, vehicleRules?.allowArrastre]);
 
   useEffect(() => {
     const term = vehicleSearch.trim().toLowerCase();

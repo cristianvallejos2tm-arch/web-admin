@@ -16,8 +16,9 @@ export async function fetchObservationChecklistStats(
 ) {
   let query = supabase
     .from('observaciones_checklist')
-    .select('categoria, opcion, observacion:observaciones_seguridad(created_at, usuario_id)')
-    .eq('observacion.usuario_id', usuarioId);
+    .select('categoria, opcion, observacion:observaciones_seguridad(created_at)')
+    .neq('categoria', 'Estado de la Tarea')
+    .neq('opcion', 'situacion corregida');
 
   // Aplica filtros de fecha si el cliente los pasó para acotar el periodo analizado.
   if (desde) {
