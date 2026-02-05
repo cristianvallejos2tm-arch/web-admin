@@ -84,13 +84,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
     return (
         <div className="hidden md:flex flex-col w-64 bg-stone-900 text-stone-300 h-screen fixed left-0 top-0 z-10 shadow-xl">
             <div className="p-6 border-b border-stone-800 flex items-center gap-3">
-                <div className="w-8 h-8 rounded bg-amber-500 flex items-center justify-center text-stone-900 font-bold">
-                    P
-                </div>
+                
                 <div>
                     <div>
                         <h1 className="text-white font-bold text-2xl tracking-wide">CAM</h1>
-                        <p className="text-xs text-amber-500 font-medium">CONTROL VEHICULAR</p>
+                        <p className="text-xs text-amber-500 font-medium">GESTION DIGITAL</p>
                     </div>        </div>
             </div>
 

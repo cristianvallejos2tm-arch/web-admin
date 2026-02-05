@@ -148,18 +148,27 @@ const App: React.FC = () => {
 
   // Mientras no esté autenticado mostramos el formulario de inicio de sesión.
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 w-full max-w-md">
+  return (
+    <div
+      className="min-h-screen w-full bg-center bg-cover bg-no-repeat flex items-center justify-center font-sans relative"
+      style={{ backgroundImage: "url('/login-bg.jpg')" }}
+    >
+      {/* Overlay para legibilidad */}
+      <div className="absolute inset-0 bg-black/55" />
+
+      {/* Contenido */}
+      <div className="relative z-10 w-full px-4">
+        <div className="mx-auto bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-lg border border-white/20 w-full max-w-md">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded bg-amber-500 flex items-center justify-center text-slate-900 font-bold text-xl">
-              P
+              CAM
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">CAM</h1>
-              <p className="text-sm text-amber-500 font-medium">CONTROL VEHICULAR</p>
+              <h1 className="text-2xl font-bold text-slate-900"></h1>
+              <p className="text-sm text-amber-500 font-medium">GESTION DIGITAL</p>
             </div>
           </div>
+
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Iniciar Sesión</h2>
           <p className="text-slate-500 mb-6">Ingresa tus credenciales para acceder</p>
 
@@ -181,6 +190,7 @@ const App: React.FC = () => {
                 disabled={isLoggingIn}
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña</label>
               <input
@@ -192,6 +202,7 @@ const App: React.FC = () => {
                 disabled={isLoggingIn}
               />
             </div>
+
             <button
               type="submit"
               disabled={isLoggingIn}
@@ -200,12 +211,11 @@ const App: React.FC = () => {
               {isLoggingIn ? 'Iniciando sesión...' : 'Ingresar'}
             </button>
           </form>
-
-
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Una vez autenticado mostramos el layout principal con sidebar y vistas por pestaña.
   return (

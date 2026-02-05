@@ -30,11 +30,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     <div className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 h-screen fixed left-0 top-0 z-10 shadow-xl">
       <div className="p-6 border-b border-slate-700 flex items-center gap-3">
         <div className="w-8 h-8 rounded bg-amber-500 flex items-center justify-center text-slate-900 font-bold">
-            P
+          CAM
         </div>
         <div>
-            <h1 className="text-white font-bold text-lg tracking-wide">PATAGONIA</h1>
-            <p className="text-xs text-amber-500 font-medium">FLEET COMMAND</p>
+            <h1 className="text-white font-bold text-lg tracking-wide">CAM</h1>
+            <p className="text-xs text-amber-500 font-medium">GESTION DIGITAL</p>
         </div>
       </div>
 
