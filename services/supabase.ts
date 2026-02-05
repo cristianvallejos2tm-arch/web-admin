@@ -233,21 +233,23 @@ export async function fetchEvaluacionesDesempeno() {
 
 // Vehículos
 // Lista los vehículos ordenados por patente.
-export async function fetchVehiculos({
-    page,
-    limit,
-}: {
-    page?: number;
-    limit?: number;
-} = {}) {
-    let builder = supabase.from('vehiculos').select('*', { count: 'exact' }).order('patente');
-    if (typeof page === 'number' && typeof limit === 'number') {
-        const from = (page - 1) * limit;
-        const to = from + limit - 1;
-        builder = builder.range(from, to);
-    }
-    return builder;
+export async function fetchVehiculos({ page, limit }: { page?: number; limit?: number } = {}) {
+  let builder = supabase
+    .from('vehiculos')
+    .select('id, patente, num_int, marca, modelo, funcion, sector, caracteristicas_equipo, drag', {
+      count: 'exact',
+    })
+    .order('patente');
+
+  if (typeof page === 'number' && typeof limit === 'number') {
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    builder = builder.range(from, to);
+  }
+
+  return builder;
 }
+
 
 
 // Crea un nuevo vehículo con los campos básicos.

@@ -76,8 +76,8 @@ const computeChecklistRules = (selectedVehicle: any) => {
   const showMotobombaPozoHO = has(meta, keywords.motobomba);
   const showCargasSolidas = has(sector, keywords.cargasSolidas);
 
-  // Regla de arrastre: hidro o vactor (como venías)
-  const allowArrastre = has(meta, keywords.hidro) || has(funcion, keywords.vactor);
+  // Arrastre: ahora depende de la columna drag (text: 'arrastra' | 'arrastrable' | 'no arrastra')
+  const allowArrastre = normalizeText(selectedVehicle?.drag || '') === 'arrastra';
 
   return {
     generalOnly,
@@ -125,9 +125,12 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   const [saving, setSaving] = useState(false);
   const [vehicleSearch, setVehicleSearch] = useState('');
 
-  // Remolque / arrastre de flota
+  // Remolque / arrastre
   const [trailer, setTrailer] = useState('');
- 
+  const [trailerSearch, setTrailerSearch] = useState('');
+
+  // Secciones habilitadas manualmente (solo aplica en modo: arrastre + arrastrado)
+  const [enabledSections, setEnabledSections] = useState<Record<string, boolean>>({});
 
   // Checklist State
   const [sections, setSections] = useState<ChecklistSection[]>([
@@ -222,11 +225,11 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       ],
     },
     {
-      title: 'Hidrogr\u00faa',
+      title: 'Hidrogrúa',
       items: [
         { id: 51, item: 'Estado de Comandos/Señalética', status: 'No Aplica' },
         { id: 52, item: 'Estado de Mangueras y Estabilizadores', status: 'No Aplica' },
-        { id: 53, item: 'Funcionamiento general de la Hidrogr\u00faa', status: 'No Aplica' },
+        { id: 53, item: 'Funcionamiento general de la Hidrogrúa', status: 'No Aplica' },
         { id: 54, item: 'Niveles de Aceites', status: 'No Aplica' },
         { id: 55, item: 'Pérdidas', status: 'No Aplica' },
       ],
@@ -279,6 +282,8 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       ],
     },
   ]);
+
+  const isGeneralSection = (title: string) => GENERAL_TITLES.includes(title);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -358,16 +363,37 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   }, [trailer, vehiculos]);
 
   const trailerRules = useMemo(() => computeChecklistRules(selectedTrailer), [selectedTrailer]);
-  const mergedRules = useMemo(() => mergeChecklistRules(vehicleRules, trailerRules), [vehicleRules, trailerRules]);
 
-  // Reset remolque si el vehículo no permite arrastre
+  const mergedRules = useMemo(
+    () => mergeChecklistRules(vehicleRules, trailerRules),
+    [vehicleRules, trailerRules]
+  );
+
+  // Modo "arrastra + arrastrado": tractor drag='arrastra' y trailer drag='arrastrable'
+  const isArrastreConArrastrado = useMemo(() => {
+    if (!selectedVehicle || !selectedTrailer) return false;
+    return (
+      normalizeText(selectedVehicle?.drag || '') === 'arrastra' &&
+      (selectedTrailer?.drag || '').toLowerCase() === 'arrastrable'
+    );
+  }, [selectedVehicle, selectedTrailer]);
+
+  // Reset remolque si el vehículo no permite arrastre (drag != 'arrastra')
   useEffect(() => {
     if (!vehicleRules?.allowArrastre) {
       setTrailer('');
-      
+      setTrailerSearch('');
+      // también reseteo toggles, para no arrastrar estado a otro caso
+      setEnabledSections({});
     }
   }, [vehicleRules?.allowArrastre]);
 
+  // Si cambia trailer a vacío, volvemos al caso A -> limpiamos toggles para no guardar basura
+  useEffect(() => {
+    if (!selectedTrailer) setEnabledSections({});
+  }, [selectedTrailer?.id]);
+
+  // Safety: no permitir mismo vehículo
   useEffect(() => {
     if (selectedTrailer?.id && selectedVehicle?.id && selectedTrailer.id === selectedVehicle.id) {
       setTrailer('');
@@ -380,14 +406,22 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     return vehiculos.filter((v) => (v.num_int || '').toLowerCase().includes(term.toLowerCase()));
   }, [vehiculos, vehicleSearch]);
 
+  // Trailers: solo drag='arrastrable' + búsqueda por num_int + excluir mismo
   const filteredTrailers = useMemo(() => {
     if (!vehicleRules?.allowArrastre) return [];
-    
+
+    const term = trailerSearch.trim().toLowerCase();
+
     return vehiculos
       .filter((v) => v.id !== selectedVehicle?.id)
-      
-  }, [vehiculos, selectedVehicle?.id, vehicleRules?.allowArrastre]);
+      .filter((v) => (v.drag || '').toLowerCase() === 'arrastrable')
+      .filter((v) => {
+        if (!term) return true;
+        return (v.num_int || '').toLowerCase().includes(term);
+      });
+  }, [vehiculos, selectedVehicle?.id, vehicleRules?.allowArrastre, trailerSearch]);
 
+  // Autoselect tractor por num_int exacto
   useEffect(() => {
     const term = vehicleSearch.trim().toLowerCase();
     if (!term) return;
@@ -397,29 +431,65 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     }
   }, [vehicleSearch, vehiculos, vehicle]);
 
+  // Caso A: sin trailer -> lógica vieja (filtro por reglas)
+  // Caso nuevo: con trailer (arrastre+arrastrado) -> mostrar todas
   const visibleSections = useMemo(() => {
     if (!selectedVehicle) return sections;
+
+    // Modo nuevo: mostrar todas
+    if (isArrastreConArrastrado) return sections;
+
+    // Caso A: lógica vieja
     if (mergedRules.generalOnly) {
       return sections.filter((section) => GENERAL_TITLES.includes(section.title));
     }
 
     return sections.filter((section) => {
       if (!mergedRules.showVacuumPump && section.title === 'Control Bomba Vacio') return false;
-    if (!mergedRules.showHidrogrua && section.title === 'Hidrogr\u00faa') return false;
+      if (!mergedRules.showHidrogrua && section.title === 'Hidrogrúa') return false;
       if (!mergedRules.showMotobombaPozoHO && section.title === 'Motobomba y control de pozo') return false;
       if (!mergedRules.showPortaContenedores && section.title === 'Porta Contenedores') return false;
       if (!mergedRules.showVactor && section.title === 'Vactor') return false;
       return true;
     });
-  }, [sections, mergedRules, selectedVehicle]);
+  }, [sections, mergedRules, selectedVehicle, isArrastreConArrastrado]);
 
-  const handleChecklistChange = (sectionIndex: number, itemId: number, newStatus: string) => {
-    setSections((prevSections) => {
-      const next = [...prevSections];
-      const section = next[sectionIndex];
-      section.items = section.items.map((it) => (it.id === itemId ? { ...it, status: newStatus } : it));
-      return next;
-    });
+  // En modo nuevo: si una sección NO general está bloqueada -> forzar No Aplica en sus items.
+  useEffect(() => {
+    if (!isArrastreConArrastrado) return;
+
+    setSections((prev) =>
+      prev.map((section) => {
+        if (isGeneralSection(section.title)) return section;
+
+        const enabled = !!enabledSections[section.title];
+        if (enabled) return section;
+
+        return {
+          ...section,
+          items: section.items.map((it) =>
+            it.status === 'No Aplica' ? it : { ...it, status: 'No Aplica' }
+          ),
+        };
+      })
+    );
+  }, [isArrastreConArrastrado, enabledSections]);
+
+  /**
+   * RECOMENDACIÓN (nota operativa aplicada):
+   * No usamos sectionIndex (porque visibleSections puede ser un subset de sections).
+   * Actualizamos por sectionTitle, para que nunca se desalineen los índices.
+   */
+  const handleChecklistChange = (sectionTitle: string, itemId: number, newStatus: string) => {
+    setSections((prevSections) =>
+      prevSections.map((section) => {
+        if (section.title !== sectionTitle) return section;
+        return {
+          ...section,
+          items: section.items.map((it) => (it.id === itemId ? { ...it, status: newStatus } : it)),
+        };
+      })
+    );
   };
 
   const buildDateTime = () => {
@@ -431,6 +501,25 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 
   const handleSave = async () => {
     setSaving(true);
+
+    // Validación arrastre (no confiar solo en UI)
+    if (trailer) {
+      if (!vehicleRules?.allowArrastre) {
+        alert('Este vehículo no está marcado como "arrastra". No puede asignarse un arrastrado.');
+        setSaving(false);
+        return;
+      }
+      if (selectedTrailer?.id && selectedVehicle?.id && selectedTrailer.id === selectedVehicle.id) {
+        alert('El equipo arrastrado no puede ser el mismo vehículo.');
+        setSaving(false);
+        return;
+      }
+      if ((selectedTrailer?.drag || '').toLowerCase() !== 'arrastrable') {
+        alert('Solo podés seleccionar equipos con drag="arrastrable".');
+        setSaving(false);
+        return;
+      }
+    }
 
     const inicio = buildDateTime() || new Date().toISOString();
 
@@ -444,6 +533,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
           caracteristicas_equipo: selectedTrailer.caracteristicas_equipo,
           marca: selectedTrailer.marca,
           modelo: selectedTrailer.modelo,
+          drag: selectedTrailer.drag,
         }
       : null;
 
@@ -468,6 +558,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
           caracteristicas_equipo: selectedVehicle.caracteristicas_equipo,
           marca: selectedVehicle.marca,
           modelo: selectedVehicle.modelo,
+          drag: selectedVehicle.drag,
         }
       : null;
 
@@ -481,6 +572,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     const novedades = {
       checklist_full: sections,
       checklist_visible: visibleSections,
+      enabled_sections: isArrastreConArrastrado ? enabledSections : null,
       rules_vehicle: vehicleRules,
       rules_trailer: trailerRules,
       rules_merged: mergedRules,
@@ -595,7 +687,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
               {filteredVehicles.map((v) => (
                 <option key={v.id} value={v.patente || v.id}>
                   {v.patente} {v.marca ? `- ${v.marca}` : ''} {v.modelo ? `(${v.modelo})` : ''}{' '}
-                  {v.num_int ? `| Interno ${v.num_int}` : ''}
+                  {v.num_int ? `| Interno ${v.num_int}` : ''} {v.drag ? `| ${v.drag}` : ''}
                 </option>
               ))}
             </select>
@@ -606,7 +698,14 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
             <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-700">Equipo remolcado / arrastre</label>
 
-             
+              <input
+                type="text"
+                value={trailerSearch}
+                onChange={(e) => setTrailerSearch(e.target.value)}
+                placeholder="Buscar arrastrable por número interno"
+                className="w-full h-9 px-3 border border-slate-300 rounded text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
               <select
                 value={trailer}
                 onChange={(e) => setTrailer(e.target.value)}
@@ -616,7 +715,7 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
                 {filteredTrailers.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.patente} {v.marca ? `- ${v.marca}` : ''} {v.modelo ? `(${v.modelo})` : ''}{' '}
-                    {v.num_int ? `| Interno ${v.num_int}` : ''}
+                    {v.num_int ? `| Interno ${v.num_int}` : ''} {v.drag ? `| ${v.drag}` : ''}
                   </option>
                 ))}
               </select>
@@ -667,42 +766,72 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       </div>
 
       <div className="space-y-6">
-        {visibleSections.map((section, sectionIndex) => (
-          <div key={sectionIndex} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-900 text-white">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-bold w-2/3">
-                    {section.title === 'Motobomba y control de pozo'
-                      ? 'Control de pozo, Motobomba y HO'
-                      : section.title === 'Cargas Generales' && mergedRules.showCargasSolidas
-                        ? 'Cargas S\u00f3lidas'
-                        : section.title}
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold w-1/3">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {section.items.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-bold text-slate-700">{item.item}</td>
-                    <td className="px-6 py-4">
-                      <select
-                        value={item.status}
-                        onChange={(e) => handleChecklistChange(sectionIndex, item.id, e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Bueno">Bueno</option>
-                        <option value="Malo">Malo</option>
-                        <option value="No Aplica">No Aplica</option>
-                      </select>
-                    </td>
+        {visibleSections.map((section) => {
+          const sectionEnabled =
+            !isArrastreConArrastrado || isGeneralSection(section.title) || !!enabledSections[section.title];
+
+          return (
+            <div key={section.title} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-slate-900 text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-bold w-2/3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>
+                          {section.title === 'Motobomba y control de pozo'
+                            ? 'Control de pozo, Motobomba y HO'
+                            : section.title === 'Cargas Generales' && mergedRules.showCargasSolidas
+                            ? 'Cargas Sólidas'
+                            : section.title}
+                        </span>
+
+                        {isArrastreConArrastrado && !isGeneralSection(section.title) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEnabledSections((prev) => ({
+                                ...prev,
+                                [section.title]: !prev[section.title],
+                              }))
+                            }
+                            className={`px-3 py-1 rounded text-xs font-semibold border ${
+                              enabledSections[section.title]
+                                ? 'bg-emerald-500 border-emerald-400'
+                                : 'bg-slate-700 border-slate-500'
+                            }`}
+                          >
+                            {enabledSections[section.title] ? 'Habilitada' : 'Habilitar'}
+                          </button>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold w-1/3">Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {section.items.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4 text-sm font-bold text-slate-700">{item.item}</td>
+                      <td className="px-6 py-4">
+                        <select
+                          value={item.status}
+                          disabled={!sectionEnabled}
+                          onChange={(e) => handleChecklistChange(section.title, item.id, e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="Bueno">Bueno</option>
+                          <option value="Malo">Malo</option>
+                          <option value="No Aplica">No Aplica</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
@@ -734,4 +863,3 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 };
 
 export default ShiftChangeForm;
-
