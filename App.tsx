@@ -212,8 +212,22 @@ const App: React.FC = () => {
             </button>
           </form>
         </div>
+       <footer className="absolute bottom-6 right-8 text-xs tracking-wide text-white/60">
+  <a
+    href="https://2tm.com.ar"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="hover:text-white transition-colors"
+  >
+    Powered by <span className="font-bold">2TM</span>
+  </a>
+</footer>
+
+
+
       </div>
     </div>
+    
   );
 }
 
