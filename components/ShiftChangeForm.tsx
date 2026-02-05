@@ -821,8 +821,12 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
                           className="w-full px-3 py-2 border border-slate-300 rounded text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                         >
                           <option value="Bueno">Bueno</option>
-                          <option value="Malo">Malo</option>
+                          <option value="Regular">Regular</option>
+                          <option value="Roto">Roto</option>
+                          <option value="Falta">Falta</option>
+                          <option value="Reparar">Reparar</option>
                           <option value="No Aplica">No Aplica</option>
+
                         </select>
                       </td>
                     </tr>

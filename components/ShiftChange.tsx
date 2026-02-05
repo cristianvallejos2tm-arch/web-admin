@@ -194,6 +194,7 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
                   </table>
                 </div>
               ))}
+              
             </div>
           )}
         </div>
