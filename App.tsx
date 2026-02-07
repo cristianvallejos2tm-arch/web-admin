@@ -46,6 +46,7 @@ const App: React.FC = () => {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const loadUserData = async (userId: string, email?: string | null) => {
     const { data, error } = await supabase
@@ -237,17 +238,28 @@ const App: React.FC = () => {
       {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={handleTabChange}
+        setActiveTab={(tab) => {
+          handleTabChange(tab);
+          setMobileMenuOpen(false);
+        }}
         onLogout={handleLogout}
         userName={userData?.nombre}
         userModules={userData?.modules}
         userRole={userData?.rol}
+        mobileMenuOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
       {/* Mobile Header (placeholder for mobile responsive nav) */}
       <div className="md:hidden fixed w-full bg-stone-900 text-white p-4 z-20 flex justify-between items-center shadow-md">
         <span className="font-bold tracking-wide">CAM</span>
-        <button className="text-amber-500 font-bold">MENU</button>
+        <button
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="text-amber-500 font-bold"
+          aria-label="Cambiar menú"
+        >
+          MENU
+        </button>
       </div>
 
       {/* Main Content */}
@@ -277,7 +289,7 @@ const App: React.FC = () => {
           {activeTab === 'proveedores' && <Proveedores />}
           {activeTab === 'compras' && <Compras />}
           {activeTab === 'autorizaciones' && <Autorizaciones userEmail={userData?.email} userRole={userData?.rol} />}
-          {activeTab === 'observations' && <ObservationsModule />}
+          {activeTab === 'observations' && <ObservationsModule userRole={userData?.rol} />}
           {activeTab === 'notifications' && <NotificationsModule />}
           
         </div>

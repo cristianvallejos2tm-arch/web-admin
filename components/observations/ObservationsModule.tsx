@@ -13,6 +13,10 @@ import {
 import { fetchObservationChecklistStats } from '../../services/observaciones_stats';
 import { supabase } from '../../services/supabase';
 
+interface ObservationsModuleProps {
+  userRole?: 'admin' | 'editor' | 'solo_lectura';
+}
+
 const getChecklistEntries = (checklist: Record<string, string[]>) => {
   const lookups = OBSERVATION_CHECKLIST.reduce<Record<string, string>>((acc, category) => {
     acc[category.id] = category.label;
@@ -36,7 +40,7 @@ const fetchCurrentUserId = async () => {
 
 const formatInputDate = (date: Date) => date.toISOString().split('T')[0];
 
-export default function ObservationsModule() {
+export default function ObservationsModule({ userRole }: ObservationsModuleProps) {
   const [observations, setObservations] = useState<ObservationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<ObservationRow | null>(null);
@@ -57,7 +61,11 @@ export default function ObservationsModule() {
   const formRef = useRef<HTMLDivElement>(null);
 
   // Carga la lista completa y la refresca al guardar una observación.
+  const canViewList = userRole === 'admin';
+  const canViewStats = canViewList;
+
   const loadObservations = useCallback(async () => {
+    if (!canViewList) return;
     setLoading(true);
     try {
       const { data } = await fetchObservations();
@@ -67,7 +75,7 @@ export default function ObservationsModule() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canViewList]);
 
   useEffect(() => {
     loadObservations();
@@ -156,6 +164,7 @@ export default function ObservationsModule() {
   }, []);
 
   const handleStats = () => {
+    if (!canViewStats) return;
     setShowStats(true);
     setShowForm(false); // ✅ al abrir stats, cierro el form
     loadStats(statsDesde, statsHasta);
@@ -179,13 +188,15 @@ export default function ObservationsModule() {
               {showForm ? 'Cerrar formulario' : 'Generar nueva'}
             </button>
 
-            <button
-              type="button"
-              onClick={handleStats}
-              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-500"
-            >
-              Estadísticas
-            </button>
+            {canViewStats && (
+              <button
+                type="button"
+                onClick={handleStats}
+                className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-500"
+              >
+                Estadísticas
+              </button>
+            )}
           </div>
         </div>
 
@@ -196,7 +207,7 @@ export default function ObservationsModule() {
         )}
       </div>
 
-      {showStats && (
+      {showStats && canViewStats && (
         <ObservationsStats
           entries={statsEntries}
           loading={statsLoading}
@@ -211,13 +222,23 @@ export default function ObservationsModule() {
         />
       )}
 
-      <ObservationList
-        observations={observations}
-        loading={loading}
-        onRefresh={loadObservations}
-        onViewDetail={handleDetail}
-        onNew={handleToggleForm} // ✅ ahora el “Nuevo” también hace toggle
-      />
+      {canViewList ? (
+        <ObservationList
+          observations={observations}
+          loading={loading}
+          onRefresh={loadObservations}
+          onViewDetail={handleDetail}
+          onNew={handleToggleForm} // ✅ ahora el “Nuevo” también hace toggle
+        />
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600">
+          <p className="font-semibold text-slate-900">Listado restringido</p>
+          <p className="mt-2">
+            Solo los administradores pueden revisar el historial completo de observaciones; aun así puedes
+            generar nuevas entradas usando el botón “Generar nueva”.
+          </p>
+        </div>
+      )}
 
       <ObservationDetailModal
         observation={detail ?? undefined}
