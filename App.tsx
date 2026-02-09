@@ -37,6 +37,29 @@ interface UserData {
 const App: React.FC = () => {
   const STORAGE_KEY = 'cam-session';
   const TAB_KEY = 'cam-last-tab';
+  const MODULE_TO_TAB: Record<string, string> = {
+    vehicles: 'vehicles',
+    tasks: 'tasks',
+    work_orders: 'workorders',
+    shift_change: 'shift',
+    maintenance: 'maintenance',
+    lubricants: 'lubricantes',
+    tires: 'cubiertas',
+    inventory: 'inventory',
+    users: 'users',
+    panol: 'panol',
+    performance: 'eval',
+    proveedores: 'proveedores',
+    compras: 'compras',
+    autorizaciones: 'autorizaciones',
+    capacitaciones: 'capacitaciones',
+    observaciones: 'observations',
+    incidentes: 'incidents',
+    notificaciones: 'notifications',
+    profile: 'profile',
+    config: 'configuration',
+    password: 'change-password',
+  };
   const path = typeof window !== 'undefined' ? window.location.pathname : '';
   if (path.startsWith('/capacitaciones/') && path.split('/').length >= 3) {
     return <CapacitacionExam />;
@@ -48,6 +71,15 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const getFirstAllowedTab = (user: UserData): string => {
+    if (user.rol === 'admin') return 'dashboard';
+    const firstModuleTab = user.modules
+      .map((moduleCode) => MODULE_TO_TAB[moduleCode])
+      .find(Boolean);
+    if (firstModuleTab && firstModuleTab !== 'dashboard') return firstModuleTab;
+    return 'profile';
+  };
 
   const loadUserData = async (userId: string, email?: string | null) => {
     const { data, error } = await supabase
@@ -107,9 +139,20 @@ const App: React.FC = () => {
 
   // Cambia la pestaña activa y la persiste en localStorage para la próxima visita.
   const handleTabChange = (tab: string) => {
+    if (tab === 'dashboard' && userData?.rol !== 'admin') return;
     setActiveTab(tab);
     localStorage.setItem(TAB_KEY, tab);
   };
+
+  useEffect(() => {
+    if (!userData) return;
+    if (activeTab !== 'dashboard') return;
+    if (userData.rol === 'admin') return;
+
+    const fallbackTab = getFirstAllowedTab(userData);
+    setActiveTab(fallbackTab);
+    localStorage.setItem(TAB_KEY, fallbackTab);
+  }, [activeTab, userData]);
 
   // Procesa el formulario de login usando Supabase Auth y carga los datos del usuario.
   const handleLogin = async (e: React.FormEvent) => {
@@ -266,7 +309,7 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 md:ml-64 p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300">
         <div className="max-w-7xl mx-auto">
-          {activeTab === 'dashboard' && <Dashboard />}
+          {activeTab === 'dashboard' && userData?.rol === 'admin' && <Dashboard />}
           {activeTab === 'vehicles' && <Vehicles />}
           {activeTab === 'checklists' && (
             <div className="flex items-center justify-center h-[60vh] text-slate-400">

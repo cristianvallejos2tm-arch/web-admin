@@ -76,11 +76,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     // Función para verificar si el usuario tiene acceso a un módulo
   const hasModuleAccess = (moduleCode: string): boolean => {
+    if (moduleCode === 'dashboard') return userRole === 'admin';
     if (userRole === 'admin') return true;
     if (moduleCode === 'observaciones' && ['editor', 'solo_lectura'].includes(userRole ?? '')) {
-      return true;
-    }
-    if (moduleCode === 'incidentes' && ['editor', 'solo_lectura'].includes(userRole ?? '')) {
       return true;
     }
     if (!userModules || userModules.length === 0) return false;
