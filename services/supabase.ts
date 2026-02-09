@@ -313,6 +313,7 @@ export async function updateVehiculo(
 const VEHICLES_BUCKET = (import.meta as any).env?.VITE_SUPABASE_VEHICLES_BUCKET || 'vehiculos';
 const CAPACITACIONES_BUCKET =
     (import.meta as any).env?.VITE_SUPABASE_CAPACITACIONES_BUCKET || 'capacitaciones';
+const INCIDENTS_BUCKET = (import.meta as any).env?.VITE_SUPABASE_INCIDENTS_BUCKET || 'incidentes';
 
 // Sube la foto de un vehículo al bucket y devuelve la URL pública.
 export async function uploadVehicleImage(file: File) {
@@ -336,6 +337,19 @@ export async function uploadCapacitacionMaterial(file: File) {
     });
     if (error) throw error;
     const { data } = supabase.storage.from(CAPACITACIONES_BUCKET).getPublicUrl(fileName);
+    return data.publicUrl;
+}
+
+// Sube una imagen de incidente al bucket y devuelve la URL pÃºblica.
+export async function uploadIncidentImage(file: File, userId?: string) {
+    const safeName = file.name.replace(/[^\w.-]/g, '_');
+    const filePath = `${userId ?? 'anonimo'}/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from(INCIDENTS_BUCKET).upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from(INCIDENTS_BUCKET).getPublicUrl(filePath);
     return data.publicUrl;
 }
 

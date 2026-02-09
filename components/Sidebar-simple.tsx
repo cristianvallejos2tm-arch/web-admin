@@ -46,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         'config': 'configuration',
     'password': 'change-password',
     'observaciones': 'observations',
+    'incidentes': 'incidents',
     };
 
     const menuItems = [
@@ -68,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'analytics', label: 'Análisis IA', icon: Activity, moduleCode: 'analytics' },
         { id: 'notifications', label: 'Comunicaciones', icon: ShieldCheck, moduleCode: 'notificaciones' },
         { id: 'observations', label: 'Obs. Seguridad', icon: ShieldCheck, moduleCode: 'observaciones' },
+        { id: 'incidents', label: 'Incidentes', icon: ShieldCheck, moduleCode: 'incidentes' },
     ];
 
     const [profileOpen, setProfileOpen] = useState(false);
@@ -76,6 +78,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const hasModuleAccess = (moduleCode: string): boolean => {
     if (userRole === 'admin') return true;
     if (moduleCode === 'observaciones' && ['editor', 'solo_lectura'].includes(userRole ?? '')) {
+      return true;
+    }
+    if (moduleCode === 'incidentes' && ['editor', 'solo_lectura'].includes(userRole ?? '')) {
       return true;
     }
     if (!userModules || userModules.length === 0) return false;

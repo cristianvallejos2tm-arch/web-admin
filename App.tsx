@@ -22,6 +22,7 @@ import ChangePassword from './components/ChangePassword';
 import Configuration from './components/Configuration';
 import Vehicles from './components/Vehicles';
 import ObservationsModule from './components/observations/ObservationsModule';
+import IncidentsModule from './components/incidents/IncidentsModule';
 import NotificationsModule from './components/notifications/NotificationsModule';
 import { supabase } from './services/supabase';
 
@@ -290,6 +291,7 @@ const App: React.FC = () => {
           {activeTab === 'compras' && <Compras />}
           {activeTab === 'autorizaciones' && <Autorizaciones userEmail={userData?.email} userRole={userData?.rol} />}
           {activeTab === 'observations' && <ObservationsModule userRole={userData?.rol} />}
+          {activeTab === 'incidents' && <IncidentsModule userRole={userData?.rol} />}
           {activeTab === 'notifications' && <NotificationsModule />}
           
         </div>
