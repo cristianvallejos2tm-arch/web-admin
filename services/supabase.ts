@@ -36,7 +36,7 @@ export async function fetchUnidades() {
 // Regresa id, nombre y flags de proveedores para combos ligeros.
 export async function fetchProveedoresLite() {
     // Trae sólo lo necesario para los combos de selección
-    return supabase.from('proveedores').select('id,nombre,es_externo,es_local').order('nombre');
+    return supabase.from('proveedores').select('id,nombre,tipo,es_externo,es_local').order('nombre');
 }
 
 // Devuelve usuarios básicos con id, nombre y email.
@@ -236,9 +236,12 @@ export async function fetchEvaluacionesDesempeno() {
 export async function fetchVehiculos({ page, limit }: { page?: number; limit?: number } = {}) {
   let builder = supabase
     .from('vehiculos')
-    .select('id, patente, num_int, marca, modelo, funcion, sector, caracteristicas_equipo, drag', {
+    .select(
+      'id, patente, num_int, marca, modelo, anio, vin, kilometraje_actual, activo, foto_url, base, sector, funcion, estado, op, horometro, tipo_combustible, consumo_Km, Consumo_100km, capacidat_Tanque, observaciones, caracteristicas_equipo',
+      {
       count: 'exact',
-    })
+      },
+    )
     .order('patente');
 
   if (typeof page === 'number' && typeof limit === 'number') {

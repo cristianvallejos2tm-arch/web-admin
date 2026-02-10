@@ -1,10 +1,53 @@
 import JSZip from 'jszip';
 import { IncidentRow } from '../../services/incidentes';
+import INCIDENT_TEMPLATE_SOURCE from '../../reporte de incidente.xlsm?inline';
 
-const INCIDENT_TEMPLATE_URL = new URL('../../reporte de incidente.xlsm', import.meta.url).href;
 const SHEET_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing';
+const DRAWING_MAIN_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PKG_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const asText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
+
+const decodeBase64 = (base64: string) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+};
+
+const decodePercentEncodedToBuffer = (payload: string) => {
+  const decoded = decodeURIComponent(payload);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index) & 0xff;
+  }
+  return bytes.buffer;
+};
+
+const loadFromSource = async (source: string) => {
+  if (source.startsWith('data:')) {
+    const commaIndex = source.indexOf(',');
+    if (commaIndex === -1) throw new Error('Formato data URL invalido.');
+    const metadata = source.slice(0, commaIndex);
+    const payload = source.slice(commaIndex + 1);
+    return metadata.includes(';base64') ? decodeBase64(payload) : decodePercentEncodedToBuffer(payload);
+  }
+
+  const templateUrl = `${source}${source.includes('?') ? '&' : '?'}v=${Date.now()}`;
+  const response = await fetch(templateUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar la plantilla de Excel (${response.status}).`);
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('text/html')) {
+    throw new Error('La plantilla devolvio HTML en lugar de un archivo Excel.');
+  }
+  return response.arrayBuffer();
+};
 
 const buildCatalogMap = (incident: IncidentRow) => {
   const map = new Map<string, string>();
@@ -134,14 +177,187 @@ const resolveSheetPath = async (zip: JSZip, targetSheetName: string) => {
   return target.startsWith('/') ? target.replace(/^\//, '') : `xl/${target.replace(/^xl\//, '')}`;
 };
 
-export async function downloadIncidentAsExcelTemplate(incident: IncidentRow) {
-  const response = await fetch(INCIDENT_TEMPLATE_URL);
-  if (!response.ok) {
-    throw new Error('No se pudo cargar la plantilla de Excel.');
+const ensureContentTypeForImage = async (zip: JSZip, extension: string) => {
+  const contentTypesPath = '[Content_Types].xml';
+  const contentTypesXml = await zip.file(contentTypesPath)?.async('string');
+  if (!contentTypesXml) return;
+
+  const parser = new DOMParser();
+  const serializer = new XMLSerializer();
+  const doc = parser.parseFromString(contentTypesXml, 'application/xml');
+  const root = doc.documentElement;
+  if (!root) return;
+
+  const ext = extension.toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+  const hasDefault = Array.from(root.getElementsByTagName('Default')).some(
+    (node) => (node.getAttribute('Extension') ?? '').toLowerCase() === ext,
+  );
+  if (!hasDefault) {
+    const defaultNode = doc.createElement('Default');
+    defaultNode.setAttribute('Extension', ext);
+    defaultNode.setAttribute('ContentType', mime);
+    root.appendChild(defaultNode);
+    zip.file(contentTypesPath, serializer.serializeToString(doc));
+  }
+};
+
+const inferImageExtension = (url: string, mimeType: string | null) => {
+  const mime = (mimeType ?? '').toLowerCase();
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.includes('.png')) return 'png';
+  if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg')) return 'jpg';
+  return null;
+};
+
+const addImageAnchor = (drawingDoc: XMLDocument, embedId: string, name: string, cNvPrId: number, col: number, row: number) => {
+  const anchor = drawingDoc.createElementNS(DRAWING_NS, 'xdr:oneCellAnchor');
+
+  const from = drawingDoc.createElementNS(DRAWING_NS, 'xdr:from');
+  const colNode = drawingDoc.createElementNS(DRAWING_NS, 'xdr:col');
+  colNode.textContent = String(col);
+  const colOff = drawingDoc.createElementNS(DRAWING_NS, 'xdr:colOff');
+  colOff.textContent = '0';
+  const rowNode = drawingDoc.createElementNS(DRAWING_NS, 'xdr:row');
+  rowNode.textContent = String(row);
+  const rowOff = drawingDoc.createElementNS(DRAWING_NS, 'xdr:rowOff');
+  rowOff.textContent = '0';
+  from.appendChild(colNode);
+  from.appendChild(colOff);
+  from.appendChild(rowNode);
+  from.appendChild(rowOff);
+  anchor.appendChild(from);
+
+  // Tamano aprox 220x140 px
+  const ext = drawingDoc.createElementNS(DRAWING_NS, 'xdr:ext');
+  ext.setAttribute('cx', String(220 * 9525));
+  ext.setAttribute('cy', String(140 * 9525));
+  anchor.appendChild(ext);
+
+  const pic = drawingDoc.createElementNS(DRAWING_NS, 'xdr:pic');
+  const nvPicPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:nvPicPr');
+  const cNvPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:cNvPr');
+  cNvPr.setAttribute('id', String(cNvPrId));
+  cNvPr.setAttribute('name', name);
+  const cNvPicPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:cNvPicPr');
+  nvPicPr.appendChild(cNvPr);
+  nvPicPr.appendChild(cNvPicPr);
+  pic.appendChild(nvPicPr);
+
+  const blipFill = drawingDoc.createElementNS(DRAWING_NS, 'xdr:blipFill');
+  const blip = drawingDoc.createElementNS(DRAWING_MAIN_NS, 'a:blip');
+  blip.setAttributeNS(REL_NS, 'r:embed', embedId);
+  const stretch = drawingDoc.createElementNS(DRAWING_MAIN_NS, 'a:stretch');
+  const fillRect = drawingDoc.createElementNS(DRAWING_MAIN_NS, 'a:fillRect');
+  stretch.appendChild(fillRect);
+  blipFill.appendChild(blip);
+  blipFill.appendChild(stretch);
+  pic.appendChild(blipFill);
+
+  const spPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:spPr');
+  const prstGeom = drawingDoc.createElementNS(DRAWING_MAIN_NS, 'a:prstGeom');
+  prstGeom.setAttribute('prst', 'rect');
+  const avLst = drawingDoc.createElementNS(DRAWING_MAIN_NS, 'a:avLst');
+  prstGeom.appendChild(avLst);
+  spPr.appendChild(prstGeom);
+  pic.appendChild(spPr);
+
+  anchor.appendChild(pic);
+  const clientData = drawingDoc.createElementNS(DRAWING_NS, 'xdr:clientData');
+  anchor.appendChild(clientData);
+  return anchor;
+};
+
+const embedIncidentPhotos = async (zip: JSZip, photos: string[]) => {
+  if (!photos.length) return;
+  const drawingPath = 'xl/drawings/drawing1.xml';
+  const drawingRelsPath = 'xl/drawings/_rels/drawing1.xml.rels';
+  const drawingXml = await zip.file(drawingPath)?.async('string');
+  const drawingRelsXml = await zip.file(drawingRelsPath)?.async('string');
+  if (!drawingXml || !drawingRelsXml) return;
+
+  const parser = new DOMParser();
+  const serializer = new XMLSerializer();
+  const drawingDoc = parser.parseFromString(drawingXml, 'application/xml');
+  const relsDoc = parser.parseFromString(drawingRelsXml, 'application/xml');
+  const drawingRoot = drawingDoc.documentElement;
+  const relsRoot = relsDoc.documentElement;
+  if (!drawingRoot || !relsRoot) return;
+
+  const existingRelIds = Array.from(relsRoot.getElementsByTagName('Relationship')).map((node) => node.getAttribute('Id') ?? '');
+  let relCounter = existingRelIds
+    .map((id) => Number((id.match(/^rId(\d+)$/)?.[1] ?? '0')))
+    .reduce((max, current) => Math.max(max, current), 0);
+
+  const existingShapeIds = Array.from(drawingRoot.getElementsByTagNameNS(DRAWING_NS, 'cNvPr'))
+    .map((node) => Number(node.getAttribute('id') ?? '0'))
+    .filter((value) => Number.isFinite(value));
+  let shapeCounter = existingShapeIds.reduce((max, current) => Math.max(max, current), 0);
+
+  const maxPhotos = Math.min(photos.length, 3);
+  for (let index = 0; index < maxPhotos; index += 1) {
+    const photoUrl = photos[index];
+    try {
+      const response = await fetch(photoUrl);
+      if (!response.ok) continue;
+      const mime = response.headers.get('content-type');
+      const ext = inferImageExtension(photoUrl, mime);
+      if (!ext) continue;
+      const fileData = await response.arrayBuffer();
+      const mediaName = `incidente_export_${Date.now()}_${index + 1}.${ext}`;
+      const mediaPath = `xl/media/${mediaName}`;
+      zip.file(mediaPath, fileData);
+      await ensureContentTypeForImage(zip, ext);
+
+      relCounter += 1;
+      const relId = `rId${relCounter}`;
+      const relNode = relsDoc.createElementNS(PKG_REL_NS, 'Relationship');
+      relNode.setAttribute('Id', relId);
+      relNode.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
+      relNode.setAttribute('Target', `../media/${mediaName}`);
+      relsRoot.appendChild(relNode);
+
+      shapeCounter += 1;
+      // Zona de descripcion/fotos: columnas B, F, J en fila 19 aprox.
+      const col = index === 0 ? 1 : index === 1 ? 5 : 9;
+      const row = 18;
+      const anchor = addImageAnchor(
+        drawingDoc,
+        relId,
+        `IncidenteFoto${index + 1}`,
+        shapeCounter,
+        col,
+        row,
+      );
+      drawingRoot.appendChild(anchor);
+    } catch (error) {
+      console.error('No se pudo incrustar foto en Excel', error);
+    }
   }
 
-  const templateArrayBuffer = await response.arrayBuffer();
-  const zip = await JSZip.loadAsync(templateArrayBuffer);
+  zip.file(drawingPath, serializer.serializeToString(drawingDoc));
+  zip.file(drawingRelsPath, serializer.serializeToString(relsDoc));
+};
+
+export async function downloadIncidentAsExcelTemplate(incident: IncidentRow) {
+  const sources = [INCIDENT_TEMPLATE_SOURCE, '/templates/reporte_incidente_template.xlsm'];
+  let zip: JSZip | null = null;
+  let lastError: unknown = null;
+  for (const source of sources) {
+    try {
+      const templateArrayBuffer = await loadFromSource(source);
+      zip = await JSZip.loadAsync(templateArrayBuffer);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!zip) {
+    console.error('No se pudo cargar ninguna fuente de plantilla XLSM', lastError);
+    throw new Error('No se pudo leer la plantilla XLSM (ZIP invalido).');
+  }
   const sheetPath = (await resolveSheetPath(zip, 'Reporte Incidente')) ?? 'xl/worksheets/sheet1.xml';
   const sheetXml = await zip.file(sheetPath)?.async('string');
   if (!sheetXml) {
@@ -240,11 +456,7 @@ export async function downloadIncidentAsExcelTemplate(incident: IncidentRow) {
   setSharedStringCell(sheetDoc, 'J17', incident.incidente_ambiental_area_m2, getSharedStringIndex);
 
   // Descripcion y consideraciones
-  const fotos = incident.fotos ?? [];
-  const photosText = fotos.length
-    ? `\n\nFOTOS CARGADAS:\n${fotos.map((url, index) => `${index + 1}) ${url}`).join('\n')}`
-    : '';
-  setSharedStringCell(sheetDoc, 'B19', `${asText(incident.descripcion_evento)}${photosText}`, getSharedStringIndex);
+  setSharedStringCell(sheetDoc, 'B19', asText(incident.descripcion_evento), getSharedStringIndex);
   setSharedStringCell(sheetDoc, 'J19', catalog.get('actos_inseguros'), getSharedStringIndex);
   setSharedStringCell(sheetDoc, 'J20', catalog.get('condiciones_inseguras'), getSharedStringIndex);
   setSharedStringCell(sheetDoc, 'J21', catalog.get('agente_material'), getSharedStringIndex);
@@ -276,6 +488,7 @@ export async function downloadIncidentAsExcelTemplate(incident: IncidentRow) {
   sharedRoot.setAttribute('count', String(sharedItems.length));
   sharedRoot.setAttribute('uniqueCount', String(sharedMap.size));
   zip.file(sharedStringsPath, serializer.serializeToString(sharedDoc));
+  await embedIncidentPhotos(zip, incident.fotos ?? []);
   const output = await zip.generateAsync({ type: 'uint8array' });
   const blob = new Blob([output], {
     type: 'application/vnd.ms-excel.sheet.macroEnabled.12',

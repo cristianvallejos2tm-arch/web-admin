@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Car, User, AlertCircle, Bookmark, FileText, Calendar, Clock, Save, X } from 'lucide-react';
-import { createExternalPurchaseFromWorkOrder, createWorkOrder, fetchVehiculos, fetchUsuariosLite, fetchProveedoresLite, supabase, uploadWorkOrderBudget } from '../services/supabase';
+import { createExternalPurchaseFromWorkOrder, createWorkOrder, fetchVehiculos, fetchUsuariosLite, fetchProveedoresLite, supabase, updateWorkOrder, uploadWorkOrderBudget } from '../services/supabase';
 
 interface WorkOrderFormProps {
     onBack: () => void;
@@ -115,6 +115,19 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         let presupuesto_url: string | null = null;
         try {
             if (budgetFile) {
+                const isPdf = budgetFile.type === 'application/pdf' || budgetFile.name.toLowerCase().endsWith('.pdf');
+                if (!isPdf) {
+                    alert('El archivo de presupuesto debe ser PDF.');
+                    setSaving(false);
+                    setConfirming(false);
+                    return;
+                }
+                if (budgetFile.size > 10 * 1024 * 1024) {
+                    alert('El PDF supera el maximo permitido (10MB).');
+                    setSaving(false);
+                    setConfirming(false);
+                    return;
+                }
                 presupuesto_url = await uploadWorkOrderBudget(budgetFile);
             }
         } catch (err) {
@@ -128,7 +141,7 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         const fecha_inicio = buildDateTime(form.ingresoFecha, form.ingresoHora, form.ingresoMin);
         const fecha_fin = buildDateTime(form.salidaFecha || form.fechaVto, form.salidaHora, form.salidaMin);
         const prioridadValue = (form.prioridad || 'media').toLowerCase();
-        const estadoValue = mode === 'confirm' ? 'confirmada' : (form.estado || 'abierta');
+        const estadoValue = mode === 'confirm' ? 'abierta' : (form.estado || 'abierta');
         const { data, error } = await createWorkOrder({
             numero: null,
             titulo: form.tipo,
@@ -154,7 +167,13 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
             const { error: rpcError } = await createExternalPurchaseFromWorkOrder(data.id);
             if (rpcError) {
                 console.error('Error creando compra externa', rpcError);
-                alert('La OT se guardo, pero no se pudo generar la compra externa. Revisar permisos y RPC.');
+                alert('La OT se guardo en estado Pendiente, pero no se pudo generar la compra externa. Revisar permisos y RPC.');
+                return;
+            }
+            const { error: statusError } = await updateWorkOrder(data.id, { estado: 'confirmada' });
+            if (statusError) {
+                console.error('Error actualizando estado a confirmada', statusError);
+                alert('Se genero la compra externa, pero no se pudo actualizar el estado de la OT a Confirmada.');
                 return;
             }
             const { error: emailError } = await supabase.functions.invoke('send-email-outbox');

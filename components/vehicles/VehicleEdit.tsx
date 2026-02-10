@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { HelpCircle, Upload, Car, FileText, Info, Fuel, Settings, Save, X } from 'lucide-react';
-import { updateVehiculo, uploadVehicleImage } from '../services/supabase';
-import { baseOptions, sectorFunciones } from './VehicleForm';
+import { updateVehiculo, uploadVehicleImage } from '../../services/supabase';
+import { baseOptions, operatorOptions, sectorFunciones } from './VehicleForm';
 
 interface VehicleEditProps {
     vehicle: any;
@@ -12,7 +12,7 @@ interface VehicleEditProps {
 const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
     const [form, setForm] = useState({
         id: vehicle?.id || '',
-        patente: vehicle?.domino || vehicle?.patente || '',
+        patente: vehicle?.dominio || vehicle?.patente || '',
         interno: vehicle?.internalNumber || vehicle?.patente || '',
         fechaInscripcion: '',
         estado: vehicle?.estado || 'Operativo',
@@ -25,17 +25,29 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
         base: vehicle?.base || '',
         operadoras: vehicle?.operadoras || [],
         odometro: vehicle?.km || vehicle?.kilometraje_actual || '',
-        horometro: '',
+        horometro: vehicle?.horometro || '',
         tipoComb: vehicle?.tipoComb || '',
-        consumoKm: '',
-        consumo100: '',
-        capacidad: '',
+        consumoKm: vehicle?.consumoKmLt || '',
+        consumo100: vehicle?.consumo100 || '',
+        capacidad: vehicle?.capacidad || '',
         caracteristicas: vehicle?.caracteristicas || '',
         observaciones: vehicle?.observaciones || '',
     });
     const [saving, setSaving] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [fileName, setFileName] = useState('');
+
+    const toggleOperadora = (value: string) => {
+        setForm((prev) => {
+            const exists = prev.operadoras.includes(value);
+            return {
+                ...prev,
+                operadoras: exists
+                    ? prev.operadoras.filter((op) => op !== value)
+                    : [...prev.operadoras, value],
+            };
+        });
+    };
 
     const handleSave = async () => {
         if (!form.id) return;
@@ -69,7 +81,7 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
             op: operadoraPrincipal,
             horometro: form.horometro ? Number(form.horometro) : null,
             tipo_combustible: form.tipoComb || null,
-            consumo_Km: form.consumoKmLt || null,
+            consumo_Km: form.consumoKm || null,
             Consumo_100km: form.consumo100 || null,
             capacidat_Tanque: form.capacidad || null,
             observaciones: form.observaciones || null,
@@ -264,6 +276,29 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
 
                 <div>
                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <Settings size={16} className="text-slate-400" />
+                        Operadoras
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        {operatorOptions.map((op) => (
+                            <label
+                                key={op}
+                                className="flex items-center gap-2 text-sm text-slate-700 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:border-blue-500"
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={form.operadoras.includes(op)}
+                                    onChange={() => toggleOperadora(op)}
+                                    className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="font-semibold">{op}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
                         <Fuel size={16} className="text-slate-400" />
                         Medición y Consumo
                     </h3>
@@ -415,3 +450,4 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
 };
 
 export default VehicleEdit;
+

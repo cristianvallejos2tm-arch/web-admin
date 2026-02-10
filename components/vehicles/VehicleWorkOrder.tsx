@@ -43,7 +43,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
                         <span className="font-medium text-slate-700">{vehicle?.modelo || 'SCANIA P380 A6X4'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                        <span>Dominio: <span className="font-medium text-slate-700">{vehicle?.domino || 'JNQ075'}</span></span>
+                        <span>Dominio: <span className="font-medium text-slate-700">{vehicle?.dominio || 'JNQ075'}</span></span>
                         <span>- -</span>
                         <span>Base: <span className="font-medium text-slate-700">{vehicle?.base || 'LH'}</span></span>
                         <span>-</span>

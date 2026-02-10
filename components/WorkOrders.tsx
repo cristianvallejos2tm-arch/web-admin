@@ -18,12 +18,14 @@ const WorkOrders: React.FC = () => {
     const [finalOrders, setFinalOrders] = useState<any[]>([]);
     const [finalTotal, setFinalTotal] = useState(0);
     const [finalPage, setFinalPage] = useState(1);
-    const [loading, setLoading] = useState(false);
+    const [loadingCount, setLoadingCount] = useState(0);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [selected, setSelected] = useState<any | null>(null);
     const [vehiculos, setVehiculos] = useState<any[]>([]);
     const [usuarios, setUsuarios] = useState<any[]>([]);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+    const loading = loadingCount > 0;
 
     const loadOrders = async ({
         estados,
@@ -36,23 +38,26 @@ const WorkOrders: React.FC = () => {
         limit?: number;
         target: "pendientes" | "finalizadas";
     }) => {
-        setLoading(true);
-        const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estados });
-        setLoading(false);
-        if (error) {
-            console.error("Error cargando OTs", error);
-            setErrorMsg('No se pudieron cargar las órdenes. Revisa políticas de lectura/actualización en "ordenes_trabajo".');
-            return;
-        }
-        setErrorMsg(null);
-        if (target === "pendientes") {
-            setPendingOrders(data || []);
-            setPendingTotal(count ?? 0);
-            setPendingPage(pageNumber);
-        } else {
-            setFinalOrders(data || []);
-            setFinalTotal(count ?? 0);
-            setFinalPage(pageNumber);
+        setLoadingCount((prev) => prev + 1);
+        try {
+            const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estados });
+            if (error) {
+                console.error("Error cargando OTs", error);
+                setErrorMsg('No se pudieron cargar las ordenes. Revisa politicas de lectura/actualizacion en "ordenes_trabajo".');
+                return;
+            }
+            setErrorMsg(null);
+            if (target === "pendientes") {
+                setPendingOrders(data || []);
+                setPendingTotal(count ?? 0);
+                setPendingPage(pageNumber);
+            } else {
+                setFinalOrders(data || []);
+                setFinalTotal(count ?? 0);
+                setFinalPage(pageNumber);
+            }
+        } finally {
+            setLoadingCount((prev) => Math.max(0, prev - 1));
         }
     };
 
@@ -71,7 +76,6 @@ const WorkOrders: React.FC = () => {
     const currentOrders = view === "pendientes" ? pendingOrders : finalOrders;
     const currentTotal = view === "pendientes" ? pendingTotal : finalTotal;
     const currentPage = view === "pendientes" ? pendingPage : finalPage;
-    const estadosActivos = view === "pendientes" ? ESTADOS_PENDIENTES : ESTADOS_FINALIZADAS;
 
     const filtered = useMemo(() => {
         const term = search.toLowerCase();
@@ -88,14 +92,14 @@ const WorkOrders: React.FC = () => {
     const totalPages = Math.max(1, Math.ceil(currentTotal / rowsPerPage));
 
     const vehiculoLabel = (id?: string | null) => {
-        if (!id) return "—";
+        if (!id) return "-";
         const v = vehiculos.find((x) => x.id === id);
         if (!v) return id;
         return `${v.patente || ""} ${v.marca ? `- ${v.marca}` : ""} ${v.modelo ? `(${v.modelo})` : ""}`.trim();
     };
 
     const usuarioLabel = (id?: string | null) => {
-        if (!id) return "—";
+        if (!id) return "-";
         const u = usuarios.find((x) => x.id === id);
         if (!u) return id;
         return u.nombre || u.email || id;
@@ -107,7 +111,7 @@ const WorkOrders: React.FC = () => {
         setUpdatingId(null);
         if (error) {
             console.error("Error actualizando estado OT", error);
-            setErrorMsg('No se pudo actualizar el estado. Revisa políticas de actualización en "ordenes_trabajo".');
+            setErrorMsg('No se pudo actualizar el estado. Revisa politicas de actualizacion en "ordenes_trabajo".');
             return;
         }
         loadOrders({
@@ -143,7 +147,14 @@ const WorkOrders: React.FC = () => {
     }
 
     if (view === "stats") {
-        return <WorkOrderStats onBack={() => setView("pendientes")} orders={orders} />;
+        return (
+            <WorkOrderStats
+                onBack={() => setView("pendientes")}
+                total={pendingTotal + finalTotal}
+                pendientes={pendingTotal}
+                finalizadas={finalTotal}
+            />
+        );
     }
 
     const handlePageChange = (newPage: number) => {
@@ -266,15 +277,15 @@ const WorkOrders: React.FC = () => {
                         <Loader2 className="animate-spin" size={16} /> Cargando...
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="text-slate-500">No hay ítems que mostrar</div>
+                    <div className="text-slate-500">No hay items que mostrar</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
-                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
-                                        <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Prioridad</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Estado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Tipo</th>
@@ -283,25 +294,25 @@ const WorkOrders: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filtered.slice(0, rowsPerPage).map((t) => (
+                                {filtered.map((t) => (
                                     <tr key={t.id} className="hover:bg-slate-50">
-                                        <td className="px-4 py-2 text-slate-900">{t.numero || "—"}</td>
+                                        <td className="px-4 py-2 text-slate-900">{t.numero || "-"}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
-                                            {t.fecha_inicio ? new Date(t.fecha_inicio).toLocaleDateString() : "—"}
+                                            {t.fecha_inicio ? new Date(t.fecha_inicio).toLocaleDateString() : "-"}
                                         </td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
-                                            {t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}
+                                            {t.created_at ? new Date(t.created_at).toLocaleDateString() : "-"}
                                         </td>
                                         <td className="px-4 py-2">
                                             <span className="px-2 py-1 text-xs font-semibold rounded text-white bg-red-500">
-                                                {(t.prioridad || "").charAt(0).toUpperCase() + (t.prioridad || "").slice(1) || "—"}
+                                                {(t.prioridad || "").charAt(0).toUpperCase() + (t.prioridad || "").slice(1) || "-"}
                                             </span>
                                         </td>
                                         <td className="px-4 py-2 text-slate-700 uppercase text-xs">
                                             <StatusSelect order={t} />
                                         </td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.titulo || "—"}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.descripcion || "—"}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.titulo || "-"}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.descripcion || "-"}</td>
                                         <td className="px-4 py-2 text-right">
                                             <button
                                                 onClick={() => setSelected(t)}
@@ -319,7 +330,7 @@ const WorkOrders: React.FC = () => {
 
                 <div className="flex flex-col gap-2 mt-4 text-xs text-slate-500">
                     <span>
-                        Página {currentPage} de {totalPages} ({currentTotal} registros)
+                        Pagina {currentPage} de {totalPages} ({currentTotal} registros)
                     </span>
                     <div className="flex flex-wrap items-center gap-1 overflow-x-auto">
                         <button
@@ -363,32 +374,32 @@ const WorkOrders: React.FC = () => {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
                             <div>
-                                <span className="font-semibold"># OT:</span> {selected.numero || "—"}
+                                <span className="font-semibold"># OT:</span> {selected.numero || "-"}
                             </div>
                             <div>
                                 <span className="font-semibold">Prioridad:</span>{" "}
-                                {(selected.prioridad || "").charAt(0).toUpperCase() + (selected.prioridad || "").slice(1) || "—"}
+                                {(selected.prioridad || "").charAt(0).toUpperCase() + (selected.prioridad || "").slice(1) || "-"}
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="font-semibold">Estado:</span>
                                 <StatusSelect order={selected} />
                             </div>
                             <div>
-                                <span className="font-semibold">Tipo:</span> {selected.titulo || "—"}
+                                <span className="font-semibold">Tipo:</span> {selected.titulo || "-"}
                             </div>
                             <div>
                                 <span className="font-semibold">Inicio:</span>{" "}
-                                {selected.fecha_inicio ? new Date(selected.fecha_inicio).toLocaleString() : "—"}
+                                {selected.fecha_inicio ? new Date(selected.fecha_inicio).toLocaleString() : "-"}
                             </div>
                             <div>
                                 <span className="font-semibold">Fin:</span>{" "}
-                                {selected.fecha_fin ? new Date(selected.fecha_fin).toLocaleString() : "—"}
+                                {selected.fecha_fin ? new Date(selected.fecha_fin).toLocaleString() : "-"}
                             </div>
                             <div className="md:col-span-2">
-                                <span className="font-semibold">Observaciones:</span> {selected.descripcion || "—"}
+                                <span className="font-semibold">Observaciones:</span> {selected.descripcion || "-"}
                             </div>
                             <div>
-                                <span className="font-semibold">Vehículo:</span> {vehiculoLabel(selected.vehiculo_id)}
+                                <span className="font-semibold">Vehiculo:</span> {vehiculoLabel(selected.vehiculo_id)}
                             </div>
                             <div>
                                 <span className="font-semibold">Responsable:</span> {usuarioLabel(selected.responsable_id)}

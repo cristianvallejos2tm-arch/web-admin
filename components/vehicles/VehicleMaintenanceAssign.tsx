@@ -54,7 +54,7 @@ const VehicleMaintenanceAssign: React.FC<VehicleMaintenanceAssignProps> = ({ veh
                         </div>
                         <div className="text-sm text-slate-500">
                             <p className="font-medium text-slate-800">{vehicle?.modelo || 'SCANIA P380 A6X4'}</p>
-                            <p>Dominio: <span className="font-bold text-slate-800">{vehicle?.domino || 'JNQ075'}</span> - </p>
+                            <p>Dominio: <span className="font-bold text-slate-800">{vehicle?.dominio || 'JNQ075'}</span> - </p>
                         </div>
                     </div>
                 </div>

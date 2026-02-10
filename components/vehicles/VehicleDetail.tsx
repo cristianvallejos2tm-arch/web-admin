@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { ArrowLeft, LayoutGrid, Edit2, Wrench, Gauge, Truck, Plus, Printer } from 'lucide-react';
 
 interface Vehicle {
-    id: number;
+    id: string;
     internalNumber: string;
     badge?: string;
-    domino: string;
+    dominio: string;
     modelo: string;
     estado: string;
     km: number;
@@ -14,6 +14,7 @@ interface Vehicle {
     op: string;
     funcion: string;
     sector: string;
+    observaciones?: string;
 }
 
 interface VehicleDetailProps {
@@ -43,7 +44,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900 mb-1">Int. {vehicle.internalNumber}</h1>
                         <p className="text-slate-500 text-sm mb-1">{vehicle.modelo}</p>
-                        <p className="text-slate-500 text-sm">Dominio: <span className="font-semibold text-slate-700">{vehicle.domino}</span> - {vehicle.funcion}</p>
+                        <p className="text-slate-500 text-sm">Dominio: <span className="font-semibold text-slate-700">{vehicle.dominio}</span> - {vehicle.funcion}</p>
                     </div>
                     <div className="flex gap-2">
                         <button className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
@@ -96,7 +97,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
                         <div className="divide-y divide-slate-100">
                             <div className="flex justify-between py-4 px-6 hover:bg-slate-50/50">
                                 <span className="text-slate-500 text-sm">Dominio:</span>
-                                <span className="text-slate-900 font-medium text-sm">{vehicle.domino}</span>
+                                <span className="text-slate-900 font-medium text-sm">{vehicle.dominio}</span>
                             </div>
                             <div className="flex justify-between py-4 px-6 hover:bg-slate-50/50">
                                 <span className="text-slate-500 text-sm">Interno:</span>
@@ -132,7 +133,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
                             </div>
                             <div className="flex justify-between py-4 px-6 hover:bg-slate-50/50">
                                 <span className="text-slate-500 text-sm">Observaciones:</span>
-                                <span className="text-slate-900 font-medium text-sm">Mayo 2025 vendido tractor solo</span>
+                                <span className="text-slate-900 font-medium text-sm">{vehicle.observaciones || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -388,7 +389,7 @@ const VehicleDetail: React.FC<VehicleDetailProps> = ({ vehicle, onBack }) => {
                                     <p className="text-sm text-slate-500 mt-1">Km actual: <span className="font-bold text-slate-800">{vehicle.km.toLocaleString('es-AR')} Km</span></p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-slate-500">Dominio: <span className="font-bold text-slate-800">{vehicle.domino}</span></p>
+                                    <p className="text-sm text-slate-500">Dominio: <span className="font-bold text-slate-800">{vehicle.dominio}</span></p>
                                     <p className="text-sm text-slate-500 mt-1">Sector / Función: <span className="font-bold text-slate-800">{vehicle.sector} / {vehicle.funcion}</span></p>
                                 </div>
                                 <div>

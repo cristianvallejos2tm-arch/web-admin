@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HelpCircle, Upload, Car, FileText, Info, Fuel, Settings, Save, X } from 'lucide-react';
-import { createVehiculo } from '../services/supabase';
+import { createVehiculo } from '../../services/supabase';
 
 interface VehicleFormProps {
     onBack: () => void;
@@ -60,7 +60,7 @@ export const sectorFunciones: Record<string, string[]> = {
 VACTOR: ['VACTOR'],
 };
 
-const operatorOptions = ['PAE', 'CGC', 'YPF', 'CP', 'VIS'];
+export const operatorOptions = ['PAE', 'CGC', 'YPF', 'CP', 'VIS'];
 
 // Formulario para registrar nuevos vehículos con datos técnicos, consumo e imagen.
 const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
@@ -97,7 +97,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
         let fotoUrl: string | null = null;
         try {
             if (file) {
-                const { uploadVehicleImage } = await import('../services/supabase');
+                const { uploadVehicleImage } = await import('../../services/supabase');
                 fotoUrl = await uploadVehicleImage(file);
             }
         } catch (err) {

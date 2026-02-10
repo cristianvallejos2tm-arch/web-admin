@@ -4,27 +4,24 @@ import { ArrowLeft } from 'lucide-react';
 
 interface WorkOrderStatsProps {
     onBack: () => void;
-    orders: any[];
+    total: number;
+    pendientes: number;
+    finalizadas: number;
 }
 
-const WorkOrderStats: React.FC<WorkOrderStatsProps> = ({ onBack, orders }) => {
-    // Calcula totales que se muestran en la gráfica según los estados actuales.
+const WorkOrderStats: React.FC<WorkOrderStatsProps> = ({ onBack, total, pendientes, finalizadas }) => {
     const counts = useMemo(() => {
-        const total = orders.length;
-        const pendientes = orders.filter((o) => o.estado !== 'cerrada' && o.estado !== 'cancelada').length;
-        const finalizadas = orders.filter((o) => o.estado === 'cerrada' || o.estado === 'cancelada').length;
         return [
             { name: 'Totales', value: total, color: '#e0f2fe' },
             { name: 'Pendientes', value: pendientes, color: '#fef3c7' },
             { name: 'Finalizadas', value: finalizadas, color: '#dcfce7' },
         ];
-    }, [orders]);
+    }, [total, pendientes, finalizadas]);
 
-    // Renderiza la vista de estadísticas con botón volver y el gráfico resumen.
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-blue-600">Estad�sticas de O.T.</h1>
+                <h1 className="text-2xl font-bold text-blue-600">Estadisticas de O.T.</h1>
                 <button
                     onClick={onBack}
                     className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
