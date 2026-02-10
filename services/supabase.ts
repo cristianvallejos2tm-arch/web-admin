@@ -386,10 +386,12 @@ export async function fetchWorkOrders({
     page,
     limit,
     estados,
+    vehiculoId,
 }: {
     page?: number;
     limit?: number;
     estados?: string[];
+    vehiculoId?: string;
 } = {}) {
     const defaultEstados = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
     let builder = supabase
@@ -397,6 +399,9 @@ export async function fetchWorkOrders({
         .select('*', { count: 'exact' })
         .in('estado', estados && estados.length ? estados : defaultEstados)
         .order('created_at', { ascending: false });
+    if (vehiculoId) {
+        builder = builder.eq('vehiculo_id', vehiculoId);
+    }
     if (typeof page === 'number' && typeof limit === 'number') {
         const from = (page - 1) * limit;
         const to = from + limit - 1;

@@ -6,6 +6,7 @@ import { fetchWorkOrders, fetchVehiculos, fetchUsuariosLite, updateWorkOrder } f
 
 const ESTADOS_PENDIENTES = ["abierta", "en_progreso", "pausada", "confirmada", "vencido"];
 const ESTADOS_FINALIZADAS = ["cerrada", "cancelada"];
+const PRIORIDADES = ["alta", "media", "baja", "critica"];
 
 const WorkOrders: React.FC = () => {
     const [view, setView] = useState<"pendientes" | "finalizadas" | "new" | "stats">("pendientes");
@@ -81,13 +82,16 @@ const WorkOrders: React.FC = () => {
         const term = search.toLowerCase();
         return currentOrders.filter((o) => {
             if (!term) return true;
+            const vehiculo = vehiculos.find((x) => x.id === o.vehiculo_id);
             return (
                 (o.numero || "").toLowerCase().includes(term) ||
                 (o.titulo || "").toLowerCase().includes(term) ||
-                (o.descripcion || "").toLowerCase().includes(term)
+                (o.descripcion || "").toLowerCase().includes(term) ||
+                (vehiculo?.num_int || "").toLowerCase().includes(term) ||
+                (vehiculo?.base || "").toLowerCase().includes(term)
             );
         });
-    }, [currentOrders, search]);
+    }, [currentOrders, search, vehiculos]);
 
     const totalPages = Math.max(1, Math.ceil(currentTotal / rowsPerPage));
 
@@ -105,13 +109,25 @@ const WorkOrders: React.FC = () => {
         return u.nombre || u.email || id;
     };
 
-    const handleStatusChange = async (id: string, estado: string) => {
+    const vehiculoInterno = (id?: string | null) => {
+        if (!id) return "-";
+        const v = vehiculos.find((x) => x.id === id);
+        return v?.num_int || "-";
+    };
+
+    const vehiculoBase = (id?: string | null) => {
+        if (!id) return "-";
+        const v = vehiculos.find((x) => x.id === id);
+        return v?.base || "-";
+    };
+
+    const handleInlineUpdate = async (id: string, payload: { estado?: string; prioridad?: string }) => {
         setUpdatingId(id);
-        const { error } = await updateWorkOrder(id, { estado });
+        const { error } = await updateWorkOrder(id, payload);
         setUpdatingId(null);
         if (error) {
-            console.error("Error actualizando estado OT", error);
-            setErrorMsg('No se pudo actualizar el estado. Revisa politicas de actualizacion en "ordenes_trabajo".');
+            console.error("Error actualizando OT", error);
+            setErrorMsg('No se pudo actualizar la OT. Revisa politicas de actualizacion en "ordenes_trabajo".');
             return;
         }
         loadOrders({
@@ -121,14 +137,14 @@ const WorkOrders: React.FC = () => {
             limit: rowsPerPage,
         });
         if (selected && selected.id === id) {
-            setSelected({ ...selected, estado });
+            setSelected({ ...selected, ...payload });
         }
     };
 
     const StatusSelect = ({ order }: { order: any }) => (
         <select
             value={order.estado || "abierta"}
-            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+            onChange={(e) => handleInlineUpdate(order.id, { estado: e.target.value })}
             disabled={updatingId === order.id}
             className="text-xs border border-slate-200 rounded px-2 py-1 bg-white"
         >
@@ -139,6 +155,21 @@ const WorkOrders: React.FC = () => {
             <option value="cerrada">Finalizada</option>
             <option value="cancelada">Cancelada</option>
             <option value="vencido">Vencido</option>
+        </select>
+    );
+
+    const PrioritySelect = ({ order }: { order: any }) => (
+        <select
+            value={order.prioridad || "media"}
+            onChange={(e) => handleInlineUpdate(order.id, { prioridad: e.target.value })}
+            disabled={updatingId === order.id}
+            className="text-xs border border-slate-200 rounded px-2 py-1 bg-white min-w-[95px]"
+        >
+            {PRIORIDADES.map((prioridad) => (
+                <option key={prioridad} value={prioridad}>
+                    {prioridad.charAt(0).toUpperCase() + prioridad.slice(1)}
+                </option>
+            ))}
         </select>
     );
 
@@ -284,6 +315,8 @@ const WorkOrders: React.FC = () => {
                             <thead className="bg-slate-50">
                                 <tr>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Int.</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Base</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Prioridad</th>
@@ -297,17 +330,15 @@ const WorkOrders: React.FC = () => {
                                 {filtered.map((t) => (
                                     <tr key={t.id} className="hover:bg-slate-50">
                                         <td className="px-4 py-2 text-slate-900">{t.numero || "-"}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoInterno(t.vehiculo_id)}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoBase(t.vehiculo_id)}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
                                             {t.fecha_inicio ? new Date(t.fecha_inicio).toLocaleDateString() : "-"}
                                         </td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
                                             {t.created_at ? new Date(t.created_at).toLocaleDateString() : "-"}
                                         </td>
-                                        <td className="px-4 py-2">
-                                            <span className="px-2 py-1 text-xs font-semibold rounded text-white bg-red-500">
-                                                {(t.prioridad || "").charAt(0).toUpperCase() + (t.prioridad || "").slice(1) || "-"}
-                                            </span>
-                                        </td>
+                                        <td className="px-4 py-2"><PrioritySelect order={t} /></td>
                                         <td className="px-4 py-2 text-slate-700 uppercase text-xs">
                                             <StatusSelect order={t} />
                                         </td>
@@ -378,7 +409,7 @@ const WorkOrders: React.FC = () => {
                             </div>
                             <div>
                                 <span className="font-semibold">Prioridad:</span>{" "}
-                                {(selected.prioridad || "").charAt(0).toUpperCase() + (selected.prioridad || "").slice(1) || "-"}
+                                <PrioritySelect order={selected} />
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="font-semibold">Estado:</span>
