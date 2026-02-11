@@ -198,7 +198,7 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
 
             <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
 
-                {/* Row 1: Veh�culo & Fuera de Servicio */}
+                {/* Row 1: Vehículo & Fuera de Servicio */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="md:col-span-3 space-y-1.5">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">

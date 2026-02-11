@@ -115,7 +115,7 @@ const emptyAttachments = (): AttachmentInput[] =>
     file: null,
   }));
 
-// MÃ³dulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
+// Módulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
 const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) => {
   const canManageCapacitaciones = userRole === 'admin';
   const [trainings, setTrainings] = useState<CapacitacionSummary[]>([]);
@@ -336,7 +336,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
     }
   }, [canManageCapacitaciones]);
 
-  // Carga rÃ¡pida del catÃ¡logo de usuarios disponible para asignar a capacitaciones.
+  // Carga rápida del catálogo de usuarios disponible para asignar a capacitaciones.
   const loadUsuariosCatalogo = async () => {
     const [{ data, error }, { data: userOperadoras, error: userOperadorasError }] = await Promise.all([
       fetchUsuariosLite(),
@@ -485,12 +485,12 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       .filter((user) => user.email)
       .map((user) => ({
         to_email: user.email,
-        subject: `Nueva capacitaciÃ³n: ${title}`,
+        subject: `Nueva capacitación: ${title}`,
         body: `
           <p>Hola ${user.nombre ?? 'colaborador'},</p>
-          <p>Se ha creado la capacitaciÃ³n <strong>${title}</strong>.</p>
+          <p>Se ha creado la capacitación <strong>${title}</strong>.</p>
           ${contextText ? `<p>${contextText}</p>` : ''}
-          <p>IngresÃ¡ al portal para revisar la capacitaciÃ³n y realizar el examen oficial: <a href="${portalUrl}">${portalUrl}</a></p>
+          <p>Ingresá al portal para revisar la capacitación y realizar el examen oficial: <a href="${portalUrl}">${portalUrl}</a></p>
           <p>Saludos,<br/>Equipo CAM</p>
         `.trim(),
       }));
@@ -503,7 +503,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
     }
   };
 
-  // Ejecuta la funciÃ³n remota que despacha la cola de emails desde el backend.
+  // Ejecuta la función remota que despacha la cola de emails desde el backend.
   const triggerEmailDispatch = async () => {
     try {
       await supabase.functions.invoke('processEmailQueue');
@@ -578,7 +578,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       }
       setShowForm(true);
     } catch (error) {
-      console.error('Error cargando la capacitaciÃ³n', error);
+      console.error('Error cargando la capacitación', error);
     } finally {
       setIsFormLoading(false);
     }
@@ -742,7 +742,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
         finalVideoUrl = await uploadCapacitacionMaterial(videoFile);
       } catch (videoUploadError) {
         console.error('Error subiendo el video', videoUploadError);
-        setSaveError('No se pudo subir el video. Verifica el archivo e intÃ©ntalo nuevamente.');
+        setSaveError('No se pudo subir el video. Verifica el archivo e inténtalo nuevamente.');
         setIsSaving(false);
         return;
       }
@@ -796,8 +796,8 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       setShowForm(false);
       await loadCapacitaciones();
     } catch (error) {
-      console.error('Error guardando la capacitaciÃ³n', error);
-      setSaveError('No se pudo guardar la capacitaciÃ³n. IntÃ©ntalo nuevamente.');
+      console.error('Error guardando la capacitación', error);
+      setSaveError('No se pudo guardar la capacitación. Inténtalo nuevamente.');
     } finally {
       setIsSaving(false);
     }
@@ -865,11 +865,11 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/40 transition hover:bg-amber-600"
               >
                 <Plus size={16} />
-                Crear capacitaciÃ³n
+                Crear capacitación
               </button>
             ) : (
               <p className="text-sm text-stone-500">
-                IngresÃ¡ al examen desde el botÃ³n "Rendir examen" de cada capacitaciÃ³n.
+                Ingresá al examen desde el botón "Rendir examen" de cada capacitación.
               </p>
             )}
           </header>
@@ -904,7 +904,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-stone-900">PrÃ³ximas sesiones</h2>
+              <h2 className="text-xl font-semibold text-stone-900">Próximas sesiones</h2>
               <span className="text-sm text-stone-500">{isListLoading ? 'Cargando...' : 'Filtra y gestiona las planillas de preguntas'}</span>
             </div>
             <div className="grid gap-4">
@@ -921,7 +921,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                     </div>
                     <div className="text-sm text-stone-500">
                       <p>{session.fecha ? new Date(session.fecha).toLocaleString() : 'Fecha por definir'}</p>
-                      <p>{session.ubicacion ?? 'UbicaciÃ³n por definir'}</p>
+                      <p>{session.ubicacion ?? 'Ubicación por definir'}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4 text-sm">
@@ -982,7 +982,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               {!isListLoading && trainings.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-6 text-center text-sm text-stone-500">
                   {canManageCapacitaciones
-                    ? 'AÃºn no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.'
+                    ? 'Aún no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.'
                     : 'No hay capacitaciones disponibles para rendir en este momento.'}
                 </div>
               )}
@@ -999,7 +999,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em]">Capacitaciones</p>
                 <h1 className="text-3xl font-semibold text-stone-900">
-                  {editingSession ? 'Editar capacitaciÃ³n' : 'Nueva capacitaciÃ³n'}
+                  {editingSession ? 'Editar capacitación' : 'Nueva capacitación'}
                 </h1>
               </div>
             </div>
@@ -1010,42 +1010,42 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
 
           {isFormLoading ? (
             <div className="rounded-3xl border border-stone-100 bg-stone-50 p-6 text-center text-sm text-stone-500">
-              Cargando los datos de la capacitaciÃ³n...
+              Cargando los datos de la capacitación...
             </div>
           ) : (
             <form className="space-y-6" onSubmit={handleSubmit}>
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitaciÃ³n</h2>
+                <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitación</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm text-stone-600">
-                    TÃ­tulo:
+                    Título:
                     <input
                       type="text"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                      placeholder="TÃ­tulo de la capacitaciÃ³n"
+                      placeholder="Título de la capacitación"
                     />
                   </label>
                   <label className="space-y-2 text-sm text-stone-600">
-                    Breve introducciÃ³n:
+                    Breve introducción:
                     <textarea
                       value={intro}
                       onChange={(event) => setIntro(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                       rows={3}
-                      placeholder="Resumen corto del objetivo de la sesiÃ³n"
+                      placeholder="Resumen corto del objetivo de la sesión"
                     />
                   </label>
                 </div>
                 <label className="space-y-2 text-sm text-stone-600">
-                  DescripciÃ³n completa:
+                  Descripción completa:
                   <textarea
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
                     className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                     rows={4}
-                    placeholder="Detalle el temario, duraciÃ³n, requisitos y destinatarios"
+                    placeholder="Detalle el temario, duración, requisitos y destinatarios"
                   />
                 </label>
               </section>
@@ -1058,11 +1058,11 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                     onClick={handleSelectAllUsuarios}
                     className="text-xs font-semibold text-amber-500 hover:text-amber-600 transition"
                   >
-                    {allUsuariosSelected ? 'Limpiar selecciÃ³n' : 'Seleccionar todos'}
+                    {allUsuariosSelected ? 'Limpiar selección' : 'Seleccionar todos'}
                   </button>
                 </div>
                 <p className="text-sm text-stone-500">
-                  SeleccionÃ¡ quiÃ©n debe recibir la notificaciÃ³n por correo cuando guardes la capacitaciÃ³n.
+                  Seleccioná quién debe recibir la notificación por correo cuando guardes la capacitación.
                 </p>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="space-y-1 text-xs text-stone-500">
@@ -1181,7 +1181,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-stone-900">Archivos adjuntos</h2>
-                  <span className="text-xs text-stone-400">MÃ¡x. 3 archivos</span>
+                  <span className="text-xs text-stone-400">Máx. 3 archivos</span>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   {attachments.map((attachment, index) => (
@@ -1207,7 +1207,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 <div className="grid md:grid-cols-[1fr,150px] gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-stone-900">Cuestionario</h2>
-                    <p className="text-xs text-stone-400">Define la plantilla que completarÃ¡n los usuarios</p>
+                    <p className="text-xs text-stone-400">Define la plantilla que completarán los usuarios</p>
                   </div>
                   <label className="space-y-2 text-sm text-stone-600">
                     Nombre del cuestionario:
@@ -1216,7 +1216,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                       value={questionnaireName}
                       onChange={(event) => setQuestionnaireName(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                      placeholder="Ej. RevisiÃ³n tÃ©cnica mensual"
+                      placeholder="Ej. Revisión técnica mensual"
                     />
                   </label>
                 </div>
@@ -1257,7 +1257,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                             value={question.question}
                             onChange={(event) => updateQuestionField(question.id, 'question', event.target.value)}
                             className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                            placeholder="Describe la situaciÃ³n a evaluar"
+                            placeholder="Describe la situación a evaluar"
                           />
                         </label>
                         <label className="mt-3 block space-y-2 text-sm text-stone-600">
@@ -1294,7 +1294,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                                     value={option.label}
                                     onChange={(event) => updateOptionLabel(question.id, option.id, event.target.value)}
                                     className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                                    placeholder="Texto de la opciÃ³n"
+                                    placeholder="Texto de la opción"
                                   />
                                   <label className="inline-flex items-center gap-1 text-xs text-stone-500">
                                     <input
@@ -1322,7 +1322,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                               className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-400 px-3 py-1 text-xs text-amber-600 hover:border-amber-600"
                             >
                               <Plus size={12} />
-                              Agregar opciÃ³n
+                              Agregar opción
                             </button>
                           </div>
                         )}
@@ -1351,7 +1351,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                       : 'bg-stone-300 cursor-not-allowed'
                   }`}
                 >
-                  {isSaving ? 'Guardando...' : 'Guardar capacitaciÃ³n'}
+                  {isSaving ? 'Guardando...' : 'Guardar capacitación'}
                 </button>
                 </div>
               </div>
@@ -1397,7 +1397,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                   </p>
                 </article>
                 <article className="rounded-2xl bg-stone-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-stone-400">UbicaciÃ³n</p>
+                  <p className="text-xs uppercase tracking-wide text-stone-400">Ubicación</p>
                   <p className="text-sm font-semibold text-stone-900">{detailSession.ubicacion ?? 'Por definir'}</p>
                 </article>
               </div>
@@ -1418,7 +1418,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 </span>
               </div>
               <div className="rounded-2xl border border-stone-100 p-4 text-sm text-stone-600">
-                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducciÃ³n</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducción</p>
                 <p className="mt-2 text-sm text-stone-700">{detailSession.introduccion}</p>
               </div>
               {detailResults.length > 0 && (
@@ -1476,7 +1476,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                             onClick={() => downloadEvaluationResult(result)}
                             className="rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
                           >
-                            Descargar evaluaciÃ³n
+                            Descargar evaluación
                           </button>
                         </div>
                       ))}
@@ -1523,7 +1523,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               {participantsLoading ? (
                 <p className="text-sm text-stone-500">Cargando participantes...</p>
               ) : currentParticipants.length === 0 ? (
-                <p className="text-sm text-stone-500">No hay usuarios inscriptos aÃºn.</p>
+                <p className="text-sm text-stone-500">No hay usuarios inscriptos aún.</p>
               ) : (
                 <div className="space-y-3">
                     {currentParticipants.map((participant) => (
@@ -1556,7 +1556,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                               onClick={() => downloadEvaluation(participant)}
                               className="mt-2 w-full rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
                             >
-                              Descargar evaluaciÃ³n
+                              Descargar evaluación
                             </button>
                             {participant.usuarios?.id && participantResults[participant.usuarios.id] && (
                               <div className="text-right mt-2 space-y-1">
@@ -1568,7 +1568,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                                 participantResults[participant.usuarios.id].aprobado ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
-                              {participantResults[participant.usuarios.id].aprobado ? 'AprobÃ³' : 'ReprobÃ³'}
+                              {participantResults[participant.usuarios.id].aprobado ? 'Aprobó' : 'Reprobó'}
                             </p>
                           </div>
                         )}
