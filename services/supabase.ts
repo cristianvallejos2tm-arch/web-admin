@@ -387,11 +387,13 @@ export async function fetchWorkOrders({
     limit,
     estados,
     vehiculoId,
+    search,
 }: {
     page?: number;
     limit?: number;
     estados?: string[];
     vehiculoId?: string;
+    search?: string;
 } = {}) {
     const defaultEstados = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
     let builder = supabase
@@ -401,6 +403,36 @@ export async function fetchWorkOrders({
         .order('created_at', { ascending: false });
     if (vehiculoId) {
         builder = builder.eq('vehiculo_id', vehiculoId);
+    }
+    const rawTerm = (search || '').trim();
+    if (rawTerm) {
+        const sanitized = rawTerm.replace(/[(),]/g, ' ').trim();
+        if (sanitized) {
+            const like = `%${sanitized}%`;
+            const ownFilters = [
+                `titulo.ilike.${like}`,
+                `descripcion.ilike.${like}`,
+            ];
+            const numericTerm = Number(sanitized);
+            if (!Number.isNaN(numericTerm) && /^\d+$/.test(sanitized)) {
+                ownFilters.push(`numero.eq.${sanitized}`);
+            }
+            // Evita URLs gigantes en PostgREST cuando el termino es muy amplio (ej: "5")
+            const shouldSearchVehicles = sanitized.length >= 2;
+            let vehiculoIds: string[] = [];
+            if (shouldSearchVehicles) {
+                const { data: vehiculosMatch } = await supabase
+                    .from('vehiculos')
+                    .select('id')
+                    .or(`num_int.ilike.${like},base.ilike.${like}`)
+                    .limit(60);
+                vehiculoIds = (vehiculosMatch || []).map((v: any) => v.id).filter(Boolean);
+            }
+            if (vehiculoIds.length > 0 && vehiculoIds.length <= 60) {
+                ownFilters.push(`vehiculo_id.in.(${vehiculoIds.join(',')})`);
+            }
+            builder = builder.or(ownFilters.join(','));
+        }
     }
     if (typeof page === 'number' && typeof limit === 'number') {
         const from = (page - 1) * limit;

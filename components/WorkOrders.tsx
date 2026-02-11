@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Plus, BarChart2, Loader2, Eye, X } from "lucide-react";
 import WorkOrderForm from "./WorkOrderForm";
 import WorkOrderStats from "./WorkOrderStats";
@@ -33,15 +33,17 @@ const WorkOrders: React.FC = () => {
         pageNumber,
         limit = rowsPerPage,
         target,
+        searchTerm = search,
     }: {
         estados: string[];
         pageNumber: number;
         limit?: number;
         target: "pendientes" | "finalizadas";
+        searchTerm?: string;
     }) => {
         setLoadingCount((prev) => prev + 1);
         try {
-            const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estados });
+            const { data, count, error } = await fetchWorkOrders({ page: pageNumber, limit, estados, search: searchTerm });
             if (error) {
                 console.error("Error cargando OTs", error);
                 setErrorMsg('No se pudieron cargar las ordenes. Revisa politicas de lectura/actualizacion en "ordenes_trabajo".');
@@ -74,24 +76,28 @@ const WorkOrders: React.FC = () => {
         loadCatalogs();
     }, []);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (view === "new" || view === "stats") return;
+            const estados = view === "pendientes"
+                ? (estadoFilter ? [estadoFilter] : ESTADOS_PENDIENTES)
+                : ESTADOS_FINALIZADAS;
+            loadOrders({
+                estados,
+                pageNumber: 1,
+                target: view,
+                limit: rowsPerPage,
+                searchTerm: search,
+            });
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search, view, estadoFilter]);
+
     const currentOrders = view === "pendientes" ? pendingOrders : finalOrders;
     const currentTotal = view === "pendientes" ? pendingTotal : finalTotal;
     const currentPage = view === "pendientes" ? pendingPage : finalPage;
 
-    const filtered = useMemo(() => {
-        const term = search.toLowerCase();
-        return currentOrders.filter((o) => {
-            if (!term) return true;
-            const vehiculo = vehiculos.find((x) => x.id === o.vehiculo_id);
-            return (
-                (o.numero || "").toLowerCase().includes(term) ||
-                (o.titulo || "").toLowerCase().includes(term) ||
-                (o.descripcion || "").toLowerCase().includes(term) ||
-                (vehiculo?.num_int || "").toLowerCase().includes(term) ||
-                (vehiculo?.base || "").toLowerCase().includes(term)
-            );
-        });
-    }, [currentOrders, search, vehiculos]);
+    const rows = currentOrders;
 
     const totalPages = Math.max(1, Math.ceil(currentTotal / rowsPerPage));
 
@@ -194,6 +200,7 @@ const WorkOrders: React.FC = () => {
             pageNumber: newPage,
             limit: rowsPerPage,
             target: view,
+            searchTerm: search,
         });
     };
 
@@ -204,6 +211,7 @@ const WorkOrders: React.FC = () => {
             pageNumber: 1,
             limit,
             target: view,
+            searchTerm: search,
         });
     };
 
@@ -214,6 +222,7 @@ const WorkOrders: React.FC = () => {
             pageNumber: 1,
             target: "pendientes",
             limit: rowsPerPage,
+            searchTerm: search,
         });
     };
 
@@ -254,7 +263,7 @@ const WorkOrders: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                 <div className="flex items-center justify-between mb-4 text-xs text-slate-500">
                     <span>
-                        Mostrando {filtered.length} registros de {currentTotal} ({view === "pendientes" ? "activos" : "finalizados"}).
+                        Mostrando {rows.length} registros de {currentTotal} ({view === "pendientes" ? "activos" : "finalizados"}).
                     </span>
                 </div>
                 <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
@@ -307,7 +316,7 @@ const WorkOrders: React.FC = () => {
                     <div className="flex items-center gap-2 text-slate-500 text-sm">
                         <Loader2 className="animate-spin" size={16} /> Cargando...
                     </div>
-                ) : filtered.length === 0 ? (
+                ) : rows.length === 0 ? (
                     <div className="text-slate-500">No hay items que mostrar</div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -317,7 +326,6 @@ const WorkOrders: React.FC = () => {
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Int.</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Base</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Inicio</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Prioridad</th>
                                     <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Estado</th>
@@ -327,16 +335,13 @@ const WorkOrders: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filtered.map((t) => (
+                                {rows.map((t) => (
                                     <tr key={t.id} className="hover:bg-slate-50">
                                         <td className="px-4 py-2 text-slate-900">{t.numero || "-"}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoInterno(t.vehiculo_id)}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoBase(t.vehiculo_id)}</td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">
-                                            {t.fecha_inicio ? new Date(t.fecha_inicio).toLocaleDateString() : "-"}
-                                        </td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">
-                                            {t.created_at ? new Date(t.created_at).toLocaleDateString() : "-"}
+                                            {t.created_at ? new Date(t.created_at).toLocaleString() : "-"}
                                         </td>
                                         <td className="px-4 py-2"><PrioritySelect order={t} /></td>
                                         <td className="px-4 py-2 text-slate-700 uppercase text-xs">

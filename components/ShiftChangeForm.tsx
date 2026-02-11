@@ -502,6 +502,33 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   const handleSave = async () => {
     setSaving(true);
 
+    const driverTrimmed = (driver || '').trim();
+    const vehicleTrimmed = (vehicle || '').trim();
+    const kmTrimmed = (km || '').trim();
+    const hsTrimmed = (hs || '').trim();
+    const observationsTrimmed = (observations || '').trim();
+
+    if (!driverTrimmed) {
+      alert('Debe ingresar el chofer.');
+      setSaving(false);
+      return;
+    }
+    if (!vehicleTrimmed) {
+      alert('Debe seleccionar un vehículo.');
+      setSaving(false);
+      return;
+    }
+    if (!/^\d+$/.test(kmTrimmed)) {
+      alert('Km de la unidad es obligatorio y debe ser un número entero.');
+      setSaving(false);
+      return;
+    }
+    if (!/^\d+$/.test(hsTrimmed)) {
+      alert('Hs. de la unidad es obligatorio y debe ser un número entero.');
+      setSaving(false);
+      return;
+    }
+
     // Validación arrastre (no confiar solo en UI)
     if (trailer) {
       if (!vehicleRules?.allowArrastre) {
@@ -544,9 +571,9 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     const trailerSummary = trailerSummaryParts.join(' / ');
     const remolqueText = trailerSummary ? ` | Remolque: ${trailerSummary}` : '';
 
-    const resumen = `Chofer: ${driver || ''} | Vehículo: ${vehicle || ''} | Km: ${km || ''} | Hs: ${
-      hs || ''
-    }${remolqueText} | Obs: ${observations || ''}`;
+    const resumen = `Chofer: ${driverTrimmed} | Vehículo: ${vehicleTrimmed} | Km: ${kmTrimmed} | Hs: ${
+      hsTrimmed
+    }${remolqueText} | Obs: ${observationsTrimmed}`;
 
     const vehiculo_snapshot = selectedVehicle
       ? {
@@ -573,6 +600,14 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       checklist_full: sections,
       checklist_visible: visibleSections,
       enabled_sections: isArrastreConArrastrado ? enabledSections : null,
+      datos_operativos: {
+        chofer: driverTrimmed || null,
+        vehiculo: vehicleTrimmed || null,
+        vehiculo_id: selectedVehicle?.id ?? null,
+        km: Number(kmTrimmed),
+        hs: Number(hsTrimmed),
+        observaciones: observationsTrimmed || null,
+      },
       rules_vehicle: vehicleRules,
       rules_trailer: trailerRules,
       rules_merged: mergedRules,

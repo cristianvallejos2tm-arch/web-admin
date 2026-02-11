@@ -19,6 +19,124 @@ interface ShiftChangeProps {
   userName?: string;
 }
 
+const parseNovedades = (raw: any) => {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw;
+};
+
+const parseIfJsonString = (raw: any) => {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+};
+
+const normalizeChecklistItems = (rawItems: any) => {
+  const parsedItems = parseIfJsonString(rawItems);
+  if (!Array.isArray(parsedItems)) return [];
+
+  return parsedItems
+    .map((it: any, idx: number) => {
+      const parsedItem = parseIfJsonString(it);
+      if (parsedItem && typeof parsedItem === 'object' && !Array.isArray(parsedItem)) {
+        return {
+          id: parsedItem.id ?? `legacy-${idx}`,
+          item: parsedItem.item ?? parsedItem.nombre ?? parsedItem.descripcion ?? parsedItem.label ?? `Ítem ${idx + 1}`,
+          status: parsedItem.status ?? parsedItem.estado ?? parsedItem.value ?? '—',
+        };
+      }
+      if (typeof it === 'string') {
+        return { id: `legacy-${idx}`, item: it, status: '—' };
+      }
+      if (!it || typeof it !== 'object') return null;
+      return {
+        id: it.id ?? `legacy-${idx}`,
+        item: it.item ?? it.nombre ?? it.descripcion ?? it.label ?? `Ítem ${idx + 1}`,
+        status: it.status ?? it.estado ?? it.value ?? '—',
+      };
+    })
+    .filter(Boolean);
+};
+
+const normalizeChecklistSections = (rawSections: any) => {
+  const parsedSections = parseIfJsonString(rawSections);
+
+  if (Array.isArray(parsedSections)) {
+    return parsedSections
+      .map((sec: any, idx: number) => {
+        const parsedSec = parseIfJsonString(sec);
+        if (!parsedSec || typeof parsedSec !== 'object') return null;
+        return {
+          title: parsedSec.title ?? parsedSec.titulo ?? parsedSec.nombre ?? `Sección ${idx + 1}`,
+          items: normalizeChecklistItems(parsedSec.items ?? parsedSec.detalles ?? parsedSec.checks ?? []),
+        };
+      })
+      .filter((sec: any) => sec && Array.isArray(sec.items) && sec.items.length > 0);
+  }
+
+  if (parsedSections && typeof parsedSections === 'object') {
+    return Object.entries(parsedSections)
+      .map(([key, value], idx) => {
+        const parsedValue = parseIfJsonString(value);
+
+        if (Array.isArray(parsedValue)) {
+          return {
+            title: key,
+            items: normalizeChecklistItems(parsedValue),
+          };
+        }
+
+        if (parsedValue && typeof parsedValue === 'object') {
+          const obj: any = parsedValue;
+          return {
+            title: obj.title ?? obj.titulo ?? obj.nombre ?? key ?? `Sección ${idx + 1}`,
+            items: normalizeChecklistItems(obj.items ?? obj.detalles ?? obj.checks ?? []),
+          };
+        }
+
+        if (parsedValue !== null && parsedValue !== undefined && parsedValue !== '') {
+          return {
+            title: 'Checklist',
+            items: [{ id: `legacy-flat-${idx}`, item: key, status: String(parsedValue) }],
+          };
+        }
+
+        return null;
+      })
+      .filter((sec: any) => sec && Array.isArray(sec.items) && sec.items.length > 0);
+  }
+
+  return [];
+};
+
+const extractChecklist = (novedades: any) => {
+  const candidates = [
+    novedades?.checklist_visible,
+    novedades?.checklist_full,
+    novedades?.checklist,
+    novedades?.secciones,
+    novedades?.sections,
+    novedades?.datos?.checklist,
+    novedades?.data?.checklist,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeChecklistSections(candidate);
+    if (normalized.length > 0) return normalized;
+  }
+
+  return null;
+};
+
 // Lista cambios de turno, refresca en tiempo real y permite generar/reportar cada turno.
 const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -102,8 +220,11 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
   }
 
   if (view === 'detail' && selected) {
-    const remolqueSnapshot = selected.novedades?.trailer_snapshot;
-    const legacyRemolque = selected.novedades?.remolque;
+    const novedades = parseNovedades(selected.novedades);
+    const remolqueSnapshot = novedades?.trailer_snapshot;
+    const legacyRemolque = novedades?.remolque;
+    const operationalData = novedades?.datos_operativos;
+    const vehicleSnapshot = novedades?.vehiculo_snapshot;
 
     const remolqueSnapshotLabel = remolqueSnapshot
       ? [remolqueSnapshot.patente, remolqueSnapshot.num_int ? `Interno ${remolqueSnapshot.num_int}` : null, remolqueSnapshot.modelo]
@@ -121,10 +242,21 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
 
     const remolqueLabel = remolqueSnapshotLabel || remolqueLegacyLabel;
 
-    const checklistArray =
-      (Array.isArray(selected.novedades?.checklist_visible) && selected.novedades.checklist_visible) ||
-      (Array.isArray(selected.novedades?.checklist_full) && selected.novedades.checklist_full) ||
-      null;
+    const checklistArray = extractChecklist(novedades);
+
+    const kmLabel = (operationalData?.km ?? (selected.resumen || '').match(/Km:\s*([^|]+)/i)?.[1]?.trim()) || '—';
+    const hsLabel = (operationalData?.hs ?? (selected.resumen || '').match(/Hs:\s*([^|]+)/i)?.[1]?.trim()) || '—';
+    const observationsLabel =
+      (operationalData?.observaciones ??
+        (selected.resumen || '').match(/Obs:\s*(.*)$/i)?.[1]?.trim()) ||
+      '—';
+
+    const vehicleLabel =
+      vehicleSnapshot?.patente ||
+      operationalData?.vehiculo ||
+      (selected.resumen || '').match(/Vehículo:\s*([^|]+)/i)?.[1]?.trim() ||
+      selected.resumen ||
+      '—';
 
     return (
       <div className="space-y-6">
@@ -148,19 +280,19 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
               <p className="text-xs text-slate-500">Fecha</p>
               <p className="text-base font-bold text-slate-800">{selected.inicio ? new Date(selected.inicio).toLocaleString() : '—'}</p>
               <p className="text-xs text-slate-500 mt-3">Km de la unidad</p>
-              <p className="text-base font-bold text-slate-800">{(selected.resumen || '').match(/Km:\s*([^|]+)/)?.[1]?.trim() || '—'}</p>
+              <p className="text-base font-bold text-slate-800">{kmLabel}</p>
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
               <p className="text-xs text-slate-500">Nombre y Apellido</p>
               <p className="text-base font-bold text-slate-800">{selected.entregado_email || formatUserName(selected.entregado_por)}</p>
               <p className="text-xs text-slate-500 mt-3">Hs. de la unidad</p>
-              <p className="text-base font-bold text-slate-800">{(selected.resumen || '').match(/Hs:\s*([^|]+)/)?.[1]?.trim() || '—'}</p>
+              <p className="text-base font-bold text-slate-800">{hsLabel}</p>
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
               <p className="text-xs text-slate-500">Vehículo</p>
-              <p className="text-base font-bold text-slate-800">{(selected.resumen || '').match(/Vehículo:\s*([^|]+)/)?.[1]?.trim() || selected.resumen || '—'}</p>
+              <p className="text-base font-bold text-slate-800">{vehicleLabel}</p>
             </div>
           </div>
 
@@ -170,6 +302,11 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
               <p>{remolqueLabel}</p>
             </div>
           )}
+
+          <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-800">Observaciones</p>
+            <p className="whitespace-pre-wrap">{observationsLabel}</p>
+          </div>
 
           {!checklistArray ? (
             <div className="bg-white rounded-lg border border-slate-200 p-4 text-sm text-slate-600">Sin checklist disponible.</div>

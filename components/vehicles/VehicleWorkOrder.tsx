@@ -10,6 +10,7 @@ interface VehicleWorkOrderProps {
 
 const ESTADOS = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
 const PRIORIDADES = ['alta', 'media', 'baja', 'critica'];
+const norm = (value: unknown) => String(value ?? '').toLowerCase();
 
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : '-');
 
@@ -71,10 +72,10 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
     }, [vehicle.id]);
 
     const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase();
+        const term = norm(search.trim());
         if (!term) return orders;
         return orders.filter((o) =>
-            `${o.numero || ''} ${o.titulo || ''} ${o.descripcion || ''} ${o.estado || ''} ${vehicle.internalNumber || ''} ${vehicle.base || ''}`.toLowerCase().includes(term),
+            norm(`${o.numero ?? ''} ${o.titulo ?? ''} ${o.descripcion ?? ''} ${o.estado ?? ''} ${vehicle.internalNumber ?? ''} ${vehicle.base ?? ''}`).includes(term),
         );
     }, [orders, search, vehicle.base, vehicle.internalNumber]);
 

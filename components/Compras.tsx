@@ -19,6 +19,7 @@ interface Compra {
 
 // Panel para listar, buscar y gestionar compras (crear/editar/borrar) y explorar la OT vinculada.
 const Compras: React.FC = () => {
+  const norm = (value: unknown) => String(value ?? '').toLowerCase();
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -140,14 +141,14 @@ const Compras: React.FC = () => {
   };
 
   const filtered = compras.filter((c) => {
-    const term = search.toLowerCase();
+    const term = norm(search);
     return (
-      (c.proveedor_nombre || '').toLowerCase().includes(term) ||
-      (c.numero || '').toLowerCase().includes(term) ||
-      (c.observaciones || '').toLowerCase().includes(term) ||
-      (c.work_order_numero || '').toLowerCase().includes(term) ||
-      (c.work_order_id || '').toLowerCase().includes(term) ||
-      (c.origen_detalle || '').toLowerCase().includes(term)
+      norm(c.proveedor_nombre).includes(term) ||
+      norm(c.numero).includes(term) ||
+      norm(c.observaciones).includes(term) ||
+      norm(c.work_order_numero).includes(term) ||
+      norm(c.work_order_id).includes(term) ||
+      norm(c.origen_detalle).includes(term)
     );
   });
 

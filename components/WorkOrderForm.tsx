@@ -143,7 +143,6 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         const prioridadValue = (form.prioridad || 'media').toLowerCase();
         const estadoValue = mode === 'confirm' ? 'abierta' : (form.estado || 'abierta');
         const { data, error } = await createWorkOrder({
-            numero: null,
             titulo: form.tipo,
             descripcion: `${form.trabajo}${form.fueraServicio === 'si' ? ' | Fuera de servicio' : ''}`,
             estado: estadoValue,
@@ -193,7 +192,7 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
                         <ClipboardList className="text-blue-500" size={24} />
                         NUEVA ORDEN DE TRABAJO
                     </h2>
-                    <p className="text-sm text-slate-500 mt-1">Cree una nueva orden de trabajo para mantenimiento o reparaci�n.</p>
+                    <p className="text-sm text-slate-500 mt-1">Cree una nueva orden de trabajo para mantenimiento o reparación.</p>
                 </div>
             </div>
 
