@@ -137,6 +137,23 @@ const extractChecklist = (novedades: any) => {
   return null;
 };
 
+const extractObservations = (novedades: any, resumen?: string | null) => {
+  const structuredCandidates = [
+    novedades?.datos_operativos?.observaciones,
+    novedades?.observaciones,
+    novedades?.obs,
+    novedades?.detalle_observaciones,
+  ];
+  const structured = structuredCandidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+  if (structured) return String(structured).trim();
+
+  const summaryText = String(resumen || '');
+  const obsMatch = summaryText.match(/Obs:\s*([\s\S]*)$/i);
+  if (obsMatch?.[1]?.trim()) return obsMatch[1].trim();
+
+  return '—';
+};
+
 // Lista cambios de turno, refresca en tiempo real y permite generar/reportar cada turno.
 const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -246,10 +263,7 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
 
     const kmLabel = (operationalData?.km ?? (selected.resumen || '').match(/Km:\s*([^|]+)/i)?.[1]?.trim()) || '—';
     const hsLabel = (operationalData?.hs ?? (selected.resumen || '').match(/Hs:\s*([^|]+)/i)?.[1]?.trim()) || '—';
-    const observationsLabel =
-      (operationalData?.observaciones ??
-        (selected.resumen || '').match(/Obs:\s*(.*)$/i)?.[1]?.trim()) ||
-      '—';
+    const observationsLabel = extractObservations(novedades, selected.resumen);
 
     const vehicleLabel =
       vehicleSnapshot?.patente ||

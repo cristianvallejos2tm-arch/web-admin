@@ -8,6 +8,13 @@ interface VehicleWorkOrderProps {
     onBack: () => void;
 }
 
+const getOrderObservation = (order: any): string => {
+    if (!order) return '-';
+    const candidates = [order.descripcion, order.observaciones, order.detalle, order.origen_detalle];
+    const found = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+    return found ? String(found) : '-';
+};
+
 const ESTADOS = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
 const PRIORIDADES = ['alta', 'media', 'baja', 'critica'];
 const norm = (value: unknown) => String(value ?? '').toLowerCase();
@@ -350,7 +357,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
                                             </select>
                                         </td>
                                         <td className="px-4 py-2">{responsableLabel(order.responsable_id)}</td>
-                                        <td className="px-4 py-2">{order.descripcion || '-'}</td>
+                                        <td className="px-4 py-2 whitespace-pre-wrap">{getOrderObservation(order)}</td>
                                     </tr>
                                 ))}
                             </tbody>

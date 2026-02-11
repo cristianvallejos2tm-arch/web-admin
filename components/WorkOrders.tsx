@@ -8,6 +8,18 @@ const ESTADOS_PENDIENTES = ["abierta", "en_progreso", "pausada", "confirmada", "
 const ESTADOS_FINALIZADAS = ["cerrada", "cancelada"];
 const PRIORIDADES = ["alta", "media", "baja", "critica"];
 
+const getOrderObservation = (order: any): string => {
+    if (!order) return "-";
+    const candidates = [
+        order.descripcion,
+        order.observaciones,
+        order.detalle,
+        order.origen_detalle,
+    ];
+    const found = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+    return found ? String(found) : "-";
+};
+
 const WorkOrders: React.FC = () => {
     const [view, setView] = useState<"pendientes" | "finalizadas" | "new" | "stats">("pendientes");
     const [rowsPerPage, setRowsPerPage] = useState(50);
@@ -348,7 +360,7 @@ const WorkOrders: React.FC = () => {
                                             <StatusSelect order={t} />
                                         </td>
                                         <td className="px-4 py-2 text-slate-700 text-xs">{t.titulo || "-"}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.descripcion || "-"}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-xs whitespace-pre-wrap">{getOrderObservation(t)}</td>
                                         <td className="px-4 py-2 text-right">
                                             <button
                                                 onClick={() => setSelected(t)}
@@ -432,7 +444,8 @@ const WorkOrders: React.FC = () => {
                                 {selected.fecha_fin ? new Date(selected.fecha_fin).toLocaleString() : "-"}
                             </div>
                             <div className="md:col-span-2">
-                                <span className="font-semibold">Observaciones:</span> {selected.descripcion || "-"}
+                                <span className="font-semibold">Observaciones:</span>
+                                <p className="mt-1 whitespace-pre-wrap break-words">{getOrderObservation(selected)}</p>
                             </div>
                             <div>
                                 <span className="font-semibold">Vehiculo:</span> {vehiculoLabel(selected.vehiculo_id)}
