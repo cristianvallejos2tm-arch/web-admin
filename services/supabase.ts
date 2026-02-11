@@ -237,7 +237,7 @@ export async function fetchVehiculos({ page, limit }: { page?: number; limit?: n
   let builder = supabase
     .from('vehiculos')
     .select(
-      'id, patente, num_int, marca, modelo, anio, vin, kilometraje_actual, activo, foto_url, base, sector, funcion, estado, op, horometro, tipo_combustible, consumo_Km, Consumo_100km, capacidat_Tanque, observaciones, caracteristicas_equipo',
+      'id, patente, num_int, marca, modelo, anio, vin, kilometraje_actual, activo, foto_url, base, sector, funcion, estado, op, horometro, tipo_combustible, consumo_Km, Consumo_100km, capacidat_Tanque, observaciones, caracteristicas_equipo, drag',
       {
       count: 'exact',
       },
