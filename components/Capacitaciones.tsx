@@ -25,6 +25,8 @@ import {
   updateCapacitacion,
   upsertCapacitacionPreguntas,
   fetchCapacitacionUsuarioRespuestas,
+  fetchBases,
+  fetchOperadoras,
   fetchUsuariosLite,
   supabase,
   uploadCapacitacionMaterial,
@@ -82,6 +84,18 @@ interface UsuarioAsignado {
   id: string;
   nombre: string;
   email: string;
+  base_id?: string | null;
+  operadoras?: string[];
+}
+
+interface BaseOption {
+  id: string;
+  nombre: string;
+}
+
+interface OperadoraOption {
+  id: string;
+  nombre: string;
 }
 
 const emptyQuestion = (): QuestionRow => ({
@@ -101,7 +115,7 @@ const emptyAttachments = (): AttachmentInput[] =>
     file: null,
   }));
 
-// Módulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
+// MÃ³dulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
 const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) => {
   const canManageCapacitaciones = userRole === 'admin';
   const [trainings, setTrainings] = useState<CapacitacionSummary[]>([]);
@@ -121,6 +135,11 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
   const [questions, setQuestions] = useState<QuestionRow[]>([emptyQuestion()]);
   const [usuariosCatalogo, setUsuariosCatalogo] = useState<UsuarioAsignado[]>([]);
   const [selectedUsuarioIds, setSelectedUsuarioIds] = useState<string[]>([]);
+  const [basesCatalogo, setBasesCatalogo] = useState<BaseOption[]>([]);
+  const [operadorasCatalogo, setOperadorasCatalogo] = useState<OperadoraOption[]>([]);
+  const [usuarioSearch, setUsuarioSearch] = useState('');
+  const [usuarioBaseFilter, setUsuarioBaseFilter] = useState('');
+  const [usuarioOperadoraFilter, setUsuarioOperadoraFilter] = useState('');
 
   const [editingSession, setEditingSession] = useState<CapacitacionSummary | null>(null);
   const [detailSession, setDetailSession] = useState<CapacitacionSummary | null>(null);
@@ -313,23 +332,85 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
     loadCapacitaciones();
     if (canManageCapacitaciones) {
       loadUsuariosCatalogo();
+      loadAssignmentCatalogs();
     }
   }, [canManageCapacitaciones]);
 
-  // Carga rápida del catálogo de usuarios disponible para asignar a capacitaciones.
+  // Carga rÃ¡pida del catÃ¡logo de usuarios disponible para asignar a capacitaciones.
   const loadUsuariosCatalogo = async () => {
-    const { data, error } = await fetchUsuariosLite();
+    const [{ data, error }, { data: userOperadoras, error: userOperadorasError }] = await Promise.all([
+      fetchUsuariosLite(),
+      supabase.from('usuarios_operadoras').select('usuario_id,operadora_id'),
+    ]);
     if (error) {
       console.error('Error cargando usuarios para capacitaciones', error);
       return;
     }
-    setUsuariosCatalogo(data ?? []);
+    if (userOperadorasError && userOperadorasError.code !== '42P01') {
+      console.error('Error cargando operadoras por usuario para capacitaciones', userOperadorasError);
+      return;
+    }
+    const operadoraMap: Record<string, string[]> = {};
+    (userOperadoras ?? []).forEach((row: any) => {
+      if (!row?.usuario_id || !row?.operadora_id) return;
+      if (!operadoraMap[row.usuario_id]) operadoraMap[row.usuario_id] = [];
+      operadoraMap[row.usuario_id].push(row.operadora_id);
+    });
+    setUsuariosCatalogo(
+      (data ?? []).map((user: any) => ({
+        id: user.id,
+        nombre: user.nombre,
+        email: user.email,
+        base_id: user.base_id ?? null,
+        operadoras: operadoraMap[user.id] ?? [],
+      })),
+    );
+  };
+
+  const loadAssignmentCatalogs = async () => {
+    const [{ data: basesData, error: basesError }, { data: operadorasData, error: operadorasError }] =
+      await Promise.all([fetchBases(), fetchOperadoras()]);
+    if (basesError) {
+      console.error('Error cargando bases para filtro de capacitaciones', basesError);
+    } else {
+      setBasesCatalogo((basesData ?? []).map((base: any) => ({ id: base.id, nombre: base.nombre })));
+    }
+    if (operadorasError) {
+      console.error('Error cargando operadoras para filtro de capacitaciones', operadorasError);
+    } else {
+      setOperadorasCatalogo(
+        (operadorasData ?? []).map((operadora: any) => ({ id: operadora.id, nombre: operadora.nombre })),
+      );
+    }
   };
 
   const totalParticipants = useMemo(
     () => trainings.reduce((acc, session) => acc + (session.inscriptos ?? 0), 0),
     [trainings],
   );
+
+  const baseNameById = useMemo(
+    () => Object.fromEntries(basesCatalogo.map((base) => [base.id, base.nombre])),
+    [basesCatalogo],
+  );
+
+  const operadoraNameById = useMemo(
+    () => Object.fromEntries(operadorasCatalogo.map((operadora) => [operadora.id, operadora.nombre])),
+    [operadorasCatalogo],
+  );
+
+  const filteredUsuariosCatalogo = useMemo(() => {
+    const search = usuarioSearch.trim().toLowerCase();
+    return usuariosCatalogo.filter((user) => {
+      const matchesBase = !usuarioBaseFilter || user.base_id === usuarioBaseFilter;
+      const matchesOperadora =
+        !usuarioOperadoraFilter || (user.operadoras ?? []).includes(usuarioOperadoraFilter);
+      const matchesSearch =
+        !search ||
+        `${user.nombre ?? ''} ${user.email ?? ''}`.toLowerCase().includes(search);
+      return matchesBase && matchesOperadora && matchesSearch;
+    });
+  }, [usuariosCatalogo, usuarioBaseFilter, usuarioOperadoraFilter, usuarioSearch]);
 
   const openSessions = useMemo(
     () =>
@@ -351,7 +432,8 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
   );
 
   const allUsuariosSelected =
-    usuariosCatalogo.length > 0 && selectedUsuarioIds.length === usuariosCatalogo.length;
+    filteredUsuariosCatalogo.length > 0 &&
+    filteredUsuariosCatalogo.every((user) => selectedUsuarioIds.includes(user.id));
 
   const isQuestionValid = (question: QuestionRow) => {
     if (!question.question.trim()) return false;
@@ -377,6 +459,9 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
     setQuestionnaireName('');
     setQuestions([emptyQuestion()]);
     setSelectedUsuarioIds([]);
+    setUsuarioSearch('');
+    setUsuarioBaseFilter('');
+    setUsuarioOperadoraFilter('');
     setSaveError('');
   };
 
@@ -400,12 +485,12 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       .filter((user) => user.email)
       .map((user) => ({
         to_email: user.email,
-        subject: `Nueva capacitación: ${title}`,
+        subject: `Nueva capacitaciÃ³n: ${title}`,
         body: `
           <p>Hola ${user.nombre ?? 'colaborador'},</p>
-          <p>Se ha creado la capacitación <strong>${title}</strong>.</p>
+          <p>Se ha creado la capacitaciÃ³n <strong>${title}</strong>.</p>
           ${contextText ? `<p>${contextText}</p>` : ''}
-          <p>Ingresá al portal para revisar la capacitación y realizar el examen oficial: <a href="${portalUrl}">${portalUrl}</a></p>
+          <p>IngresÃ¡ al portal para revisar la capacitaciÃ³n y realizar el examen oficial: <a href="${portalUrl}">${portalUrl}</a></p>
           <p>Saludos,<br/>Equipo CAM</p>
         `.trim(),
       }));
@@ -418,7 +503,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
     }
   };
 
-  // Ejecuta la función remota que despacha la cola de emails desde el backend.
+  // Ejecuta la funciÃ³n remota que despacha la cola de emails desde el backend.
   const triggerEmailDispatch = async () => {
     try {
       await supabase.functions.invoke('processEmailQueue');
@@ -436,11 +521,13 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
   };
 
   const handleSelectAllUsuarios = () => {
-    if (selectedUsuarioIds.length === usuariosCatalogo.length) {
-      setSelectedUsuarioIds([]);
+    const visibleIds = filteredUsuariosCatalogo.map((user) => user.id);
+    const allVisibleSelected = visibleIds.every((id) => selectedUsuarioIds.includes(id));
+    if (allVisibleSelected) {
+      setSelectedUsuarioIds((current) => current.filter((id) => !visibleIds.includes(id)));
       return;
     }
-    setSelectedUsuarioIds(usuariosCatalogo.map((user) => user.id));
+    setSelectedUsuarioIds((current) => Array.from(new Set([...current, ...visibleIds])));
   };
 
   const startNew = () => {
@@ -491,7 +578,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       }
       setShowForm(true);
     } catch (error) {
-      console.error('Error cargando la capacitación', error);
+      console.error('Error cargando la capacitaciÃ³n', error);
     } finally {
       setIsFormLoading(false);
     }
@@ -655,7 +742,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
         finalVideoUrl = await uploadCapacitacionMaterial(videoFile);
       } catch (videoUploadError) {
         console.error('Error subiendo el video', videoUploadError);
-        setSaveError('No se pudo subir el video. Verifica el archivo e inténtalo nuevamente.');
+        setSaveError('No se pudo subir el video. Verifica el archivo e intÃ©ntalo nuevamente.');
         setIsSaving(false);
         return;
       }
@@ -709,8 +796,8 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
       setShowForm(false);
       await loadCapacitaciones();
     } catch (error) {
-      console.error('Error guardando la capacitación', error);
-      setSaveError('No se pudo guardar la capacitación. Inténtalo nuevamente.');
+      console.error('Error guardando la capacitaciÃ³n', error);
+      setSaveError('No se pudo guardar la capacitaciÃ³n. IntÃ©ntalo nuevamente.');
     } finally {
       setIsSaving(false);
     }
@@ -778,11 +865,11 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/40 transition hover:bg-amber-600"
               >
                 <Plus size={16} />
-                Crear capacitación
+                Crear capacitaciÃ³n
               </button>
             ) : (
               <p className="text-sm text-stone-500">
-                Ingresá al examen desde el botón "Rendir examen" de cada capacitación.
+                IngresÃ¡ al examen desde el botÃ³n "Rendir examen" de cada capacitaciÃ³n.
               </p>
             )}
           </header>
@@ -817,7 +904,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-stone-900">Próximas sesiones</h2>
+              <h2 className="text-xl font-semibold text-stone-900">PrÃ³ximas sesiones</h2>
               <span className="text-sm text-stone-500">{isListLoading ? 'Cargando...' : 'Filtra y gestiona las planillas de preguntas'}</span>
             </div>
             <div className="grid gap-4">
@@ -834,7 +921,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                     </div>
                     <div className="text-sm text-stone-500">
                       <p>{session.fecha ? new Date(session.fecha).toLocaleString() : 'Fecha por definir'}</p>
-                      <p>{session.ubicacion ?? 'Ubicación por definir'}</p>
+                      <p>{session.ubicacion ?? 'UbicaciÃ³n por definir'}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4 text-sm">
@@ -895,7 +982,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               {!isListLoading && trainings.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-6 text-center text-sm text-stone-500">
                   {canManageCapacitaciones
-                    ? 'Aún no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.'
+                    ? 'AÃºn no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.'
                     : 'No hay capacitaciones disponibles para rendir en este momento.'}
                 </div>
               )}
@@ -912,7 +999,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em]">Capacitaciones</p>
                 <h1 className="text-3xl font-semibold text-stone-900">
-                  {editingSession ? 'Editar capacitación' : 'Nueva capacitación'}
+                  {editingSession ? 'Editar capacitaciÃ³n' : 'Nueva capacitaciÃ³n'}
                 </h1>
               </div>
             </div>
@@ -923,42 +1010,42 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
 
           {isFormLoading ? (
             <div className="rounded-3xl border border-stone-100 bg-stone-50 p-6 text-center text-sm text-stone-500">
-              Cargando los datos de la capacitación...
+              Cargando los datos de la capacitaciÃ³n...
             </div>
           ) : (
             <form className="space-y-6" onSubmit={handleSubmit}>
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitación</h2>
+                <h2 className="text-lg font-semibold text-stone-900">Datos de la capacitaciÃ³n</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm text-stone-600">
-                    Título:
+                    TÃ­tulo:
                     <input
                       type="text"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                      placeholder="Título de la capacitación"
+                      placeholder="TÃ­tulo de la capacitaciÃ³n"
                     />
                   </label>
                   <label className="space-y-2 text-sm text-stone-600">
-                    Breve introducción:
+                    Breve introducciÃ³n:
                     <textarea
                       value={intro}
                       onChange={(event) => setIntro(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                       rows={3}
-                      placeholder="Resumen corto del objetivo de la sesión"
+                      placeholder="Resumen corto del objetivo de la sesiÃ³n"
                     />
                   </label>
                 </div>
                 <label className="space-y-2 text-sm text-stone-600">
-                  Descripción completa:
+                  DescripciÃ³n completa:
                   <textarea
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
                     className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                     rows={4}
-                    placeholder="Detalle el temario, duración, requisitos y destinatarios"
+                    placeholder="Detalle el temario, duraciÃ³n, requisitos y destinatarios"
                   />
                 </label>
               </section>
@@ -971,19 +1058,70 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                     onClick={handleSelectAllUsuarios}
                     className="text-xs font-semibold text-amber-500 hover:text-amber-600 transition"
                   >
-                    {allUsuariosSelected ? 'Limpiar selección' : 'Seleccionar todos'}
+                    {allUsuariosSelected ? 'Limpiar selecciÃ³n' : 'Seleccionar todos'}
                   </button>
                 </div>
                 <p className="text-sm text-stone-500">
-                  Seleccioná quién debe recibir la notificación por correo cuando guardes la capacitación.
+                  SeleccionÃ¡ quiÃ©n debe recibir la notificaciÃ³n por correo cuando guardes la capacitaciÃ³n.
+                </p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="space-y-1 text-xs text-stone-500">
+                    Filtrar por base
+                    <select
+                      value={usuarioBaseFilter}
+                      onChange={(event) => setUsuarioBaseFilter(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                    >
+                      <option value="">Todas las bases</option>
+                      {basesCatalogo.map((base) => (
+                        <option key={base.id} value={base.id}>
+                          {base.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs text-stone-500">
+                    Filtrar por operadora
+                    <select
+                      value={usuarioOperadoraFilter}
+                      onChange={(event) => setUsuarioOperadoraFilter(event.target.value)}
+                      className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                    >
+                      <option value="">Todas las operadoras</option>
+                      {operadorasCatalogo.map((operadora) => (
+                        <option key={operadora.id} value={operadora.id}>
+                          {operadora.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs text-stone-500">
+                    Buscar por nombre o correo
+                    <input
+                      type="text"
+                      value={usuarioSearch}
+                      onChange={(event) => setUsuarioSearch(event.target.value)}
+                      placeholder="Ej: Juan o correo@dominio.com"
+                      className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-stone-400">
+                  Mostrando {filteredUsuariosCatalogo.length} de {usuariosCatalogo.length} usuarios.
                 </p>
                 <div className="max-h-56 overflow-y-auto rounded-2xl border border-stone-200 p-3">
                   {usuariosCatalogo.length === 0 ? (
                     <p className="text-xs text-stone-400">No hay usuarios registrados.</p>
+                  ) : filteredUsuariosCatalogo.length === 0 ? (
+                    <p className="text-xs text-stone-400">No hay usuarios que coincidan con los filtros.</p>
                   ) : (
                     <div className="grid gap-2">
-                      {usuariosCatalogo.map((usuario) => {
+                      {filteredUsuariosCatalogo.map((usuario) => {
                         const isChecked = selectedUsuarioIds.includes(usuario.id);
+                        const baseLabel = usuario.base_id ? baseNameById[usuario.base_id] ?? 'Base sin nombre' : 'Sin base';
+                        const operadorasLabel = (usuario.operadoras ?? [])
+                          .map((operadoraId) => operadoraNameById[operadoraId] ?? operadoraId)
+                          .join(', ');
                         return (
                           <label
                             key={usuario.id}
@@ -999,6 +1137,9 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                               <div>
                                 <p className="text-sm font-semibold text-stone-900">{usuario.nombre}</p>
                                 <p className="text-xs text-stone-500">{usuario.email}</p>
+                                <p className="text-xs text-stone-400">
+                                  Base: {baseLabel} {operadorasLabel ? `| Operadoras: ${operadorasLabel}` : ''}
+                                </p>
                               </div>
                             </div>
                           </label>
@@ -1040,7 +1181,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-stone-900">Archivos adjuntos</h2>
-                  <span className="text-xs text-stone-400">Máx. 3 archivos</span>
+                  <span className="text-xs text-stone-400">MÃ¡x. 3 archivos</span>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   {attachments.map((attachment, index) => (
@@ -1066,7 +1207,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 <div className="grid md:grid-cols-[1fr,150px] gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-stone-900">Cuestionario</h2>
-                    <p className="text-xs text-stone-400">Define la plantilla que completarán los usuarios</p>
+                    <p className="text-xs text-stone-400">Define la plantilla que completarÃ¡n los usuarios</p>
                   </div>
                   <label className="space-y-2 text-sm text-stone-600">
                     Nombre del cuestionario:
@@ -1075,7 +1216,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                       value={questionnaireName}
                       onChange={(event) => setQuestionnaireName(event.target.value)}
                       className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                      placeholder="Ej. Revisión técnica mensual"
+                      placeholder="Ej. RevisiÃ³n tÃ©cnica mensual"
                     />
                   </label>
                 </div>
@@ -1116,7 +1257,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                             value={question.question}
                             onChange={(event) => updateQuestionField(question.id, 'question', event.target.value)}
                             className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                            placeholder="Describe la situación a evaluar"
+                            placeholder="Describe la situaciÃ³n a evaluar"
                           />
                         </label>
                         <label className="mt-3 block space-y-2 text-sm text-stone-600">
@@ -1153,7 +1294,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                                     value={option.label}
                                     onChange={(event) => updateOptionLabel(question.id, option.id, event.target.value)}
                                     className="flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                                    placeholder="Texto de la opción"
+                                    placeholder="Texto de la opciÃ³n"
                                   />
                                   <label className="inline-flex items-center gap-1 text-xs text-stone-500">
                                     <input
@@ -1181,7 +1322,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                               className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-400 px-3 py-1 text-xs text-amber-600 hover:border-amber-600"
                             >
                               <Plus size={12} />
-                              Agregar opción
+                              Agregar opciÃ³n
                             </button>
                           </div>
                         )}
@@ -1210,7 +1351,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                       : 'bg-stone-300 cursor-not-allowed'
                   }`}
                 >
-                  {isSaving ? 'Guardando...' : 'Guardar capacitación'}
+                  {isSaving ? 'Guardando...' : 'Guardar capacitaciÃ³n'}
                 </button>
                 </div>
               </div>
@@ -1256,7 +1397,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                   </p>
                 </article>
                 <article className="rounded-2xl bg-stone-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-stone-400">Ubicación</p>
+                  <p className="text-xs uppercase tracking-wide text-stone-400">UbicaciÃ³n</p>
                   <p className="text-sm font-semibold text-stone-900">{detailSession.ubicacion ?? 'Por definir'}</p>
                 </article>
               </div>
@@ -1277,7 +1418,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                 </span>
               </div>
               <div className="rounded-2xl border border-stone-100 p-4 text-sm text-stone-600">
-                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducción</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Breve introducciÃ³n</p>
                 <p className="mt-2 text-sm text-stone-700">{detailSession.introduccion}</p>
               </div>
               {detailResults.length > 0 && (
@@ -1335,7 +1476,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                             onClick={() => downloadEvaluationResult(result)}
                             className="rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
                           >
-                            Descargar evaluación
+                            Descargar evaluaciÃ³n
                           </button>
                         </div>
                       ))}
@@ -1382,7 +1523,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
               {participantsLoading ? (
                 <p className="text-sm text-stone-500">Cargando participantes...</p>
               ) : currentParticipants.length === 0 ? (
-                <p className="text-sm text-stone-500">No hay usuarios inscriptos aún.</p>
+                <p className="text-sm text-stone-500">No hay usuarios inscriptos aÃºn.</p>
               ) : (
                 <div className="space-y-3">
                     {currentParticipants.map((participant) => (
@@ -1415,7 +1556,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                               onClick={() => downloadEvaluation(participant)}
                               className="mt-2 w-full rounded-full border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:text-stone-900"
                             >
-                              Descargar evaluación
+                              Descargar evaluaciÃ³n
                             </button>
                             {participant.usuarios?.id && participantResults[participant.usuarios.id] && (
                               <div className="text-right mt-2 space-y-1">
@@ -1427,7 +1568,7 @@ const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) =
                                 participantResults[participant.usuarios.id].aprobado ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
-                              {participantResults[participant.usuarios.id].aprobado ? 'Aprobó' : 'Reprobó'}
+                              {participantResults[participant.usuarios.id].aprobado ? 'AprobÃ³' : 'ReprobÃ³'}
                             </p>
                           </div>
                         )}

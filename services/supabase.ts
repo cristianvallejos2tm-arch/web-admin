@@ -39,9 +39,9 @@ export async function fetchProveedoresLite() {
     return supabase.from('proveedores').select('id,nombre,tipo,es_externo,es_local').order('nombre');
 }
 
-// Devuelve usuarios básicos con id, nombre y email.
+// Devuelve usuarios básicos con id, nombre, email y base para filtros ligeros.
 export async function fetchUsuariosLite() {
-    return supabase.from('usuarios').select('id,nombre,email').order('nombre');
+    return supabase.from('usuarios').select('id,nombre,email,base_id').order('nombre');
 }
 
 // Lista todas las operadoras disponibles.
