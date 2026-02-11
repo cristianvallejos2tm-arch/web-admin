@@ -6,13 +6,11 @@ import {
   fetchCapacitacionDetail,
   fetchCapacitacionIntentos,
   fetchCapacitacionPreguntas,
-  submitCapacitacionRespuestas,
-  createCapacitacionIntento,
+  submitCapacitacionAttempt,
   queueCapacitacionNotifications,
   uploadCapacitacionMaterial,
 } from '../services/supabase';
 import DiplomaTemplate, { DiplomaTemplateProps } from './DiplomaTemplate';
-import { Script } from 'vm';
 
 interface QuestionRow {
   id: string;
@@ -236,18 +234,6 @@ const CapacitacionExam: React.FC = () => {
     });
   };
 
-  const recordAttempt = async (attemptNumber: number, score: number, aprobado: boolean) => {
-    if (!capacitacionId || !currentUserId) return;
-    await createCapacitacionIntento({
-      capacitacion_id: capacitacionId,
-      usuario_id: currentUserId,
-      intento: attemptNumber,
-      score,
-      aprobado,
-    });
-    await loadAttempts();
-  };
-
   const triggerEmailDispatch = async () => {
     try {
       await supabase.functions.invoke('processEmailQueue');
@@ -379,7 +365,6 @@ const CapacitacionExam: React.FC = () => {
       const answerState = answers[question.id] ?? { text: '', selectedOptions: [] };
       const selected = answerState.selectedOptions ?? [];
       const normalizedSelection = [...selected].sort();
-      const expectedSelection = [...(question.opciones_correctas ?? [])].sort();
       const responseLabel = normalizedSelection
         .map(
           (optionId) =>
@@ -388,34 +373,43 @@ const CapacitacionExam: React.FC = () => {
         .join(', ');
       const respuestaJson = normalizedSelection.length > 0 ? JSON.stringify(normalizedSelection) : null;
       const respuestaText = question.tipo === 'texto' ? answerState.text ?? '' : responseLabel;
-      const correct =
-        question.tipo === 'texto'
-          ? (answerState.text ?? '').trim().toLowerCase() === (question.answer ?? '').trim().toLowerCase()
-          : JSON.stringify(normalizedSelection) === JSON.stringify(expectedSelection);
       return {
         pregunta_id: question.id,
-        usuario_id: sessionData.session.user.id,
         respuesta: respuestaText,
         respuesta_json: respuestaJson,
-        correct,
       };
     });
 
-    const totalQuestions = questions.length;
-    const correctCount = entries.filter((entry) => entry.correct).length;
-    const score = totalQuestions > 0 ? correctCount / totalQuestions : 0;
-    const passed = totalQuestions === 0 ? true : score >= 0.7;
-    const payload = entries.map(({ correct, ...rest }) => rest);
-
-    const { error: submitError } = await submitCapacitacionRespuestas(payload);
+    const { data: attemptResult, error: submitError } = await submitCapacitacionAttempt({
+      capacitacion_id: capacitacionId,
+      responses: entries,
+    });
     if (submitError) {
-      setError('Hubo un error al guardar tus respuestas. Inténtalo de nuevo más tarde.');
+      const backendMessage = submitError.message ?? '';
+      if (backendMessage.includes('NO_INSCRIPTO')) {
+        setError('No estás inscripto en esta capacitación.');
+      } else if (backendMessage.includes('MAX_ATTEMPTS_REACHED')) {
+        setPopNotification({
+          type: 'error',
+          message: 'Has agotado los 3 intentos disponibles.',
+        });
+      } else if (backendMessage.includes('ALREADY_PASSED')) {
+        setPopNotification({
+          type: 'success',
+          message: 'Ya habías aprobado esta capacitación.',
+        });
+      } else {
+        setError('Hubo un error al guardar tus respuestas. Inténtalo de nuevo más tarde.');
+      }
       setSubmitting(false);
       return;
     }
 
-    const attemptNumber = attempts + 1;
-    await recordAttempt(attemptNumber, score, passed);
+    const score = Number(attemptResult?.score ?? 0);
+    const passed = Boolean(attemptResult?.aprobado);
+    const attemptNumber = Number(attemptResult?.attempt_number ?? attempts + 1);
+    const triesLeft = Number(attemptResult?.tries_left ?? Math.max(0, 3 - attemptNumber));
+    await loadAttempts();
 
       if (passed) {
         setPopNotification({
@@ -461,7 +455,6 @@ const CapacitacionExam: React.FC = () => {
           }
         }
       } else {
-        const triesLeft = Math.max(0, 3 - attemptNumber);
         setPopNotification({
           type: attemptNumber >= 3 ? 'error' : 'warning',
           message:

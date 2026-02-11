@@ -324,7 +324,7 @@ const App: React.FC = () => {
           {activeTab === 'cubiertas' && <Tires />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'panol' && <Panol />}
-          {activeTab === 'capacitaciones' && <Capacitaciones />}
+          {activeTab === 'capacitaciones' && <Capacitaciones userRole={userData?.rol} />}
           {activeTab === 'eval' && <PerformanceEval />}
           {activeTab === 'profile' && <Profile />}
           {activeTab === 'change-password' && <ChangePassword />}

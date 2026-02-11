@@ -806,16 +806,18 @@ export async function submitCapacitacionRespuestas(
 
 // Inserta múltiples inscripciones a una capacitación.
 export async function insertCapacitacionInscripciones(capacitacionId: string, usuarioIds: string[]) {
-    if (usuarioIds.length === 0) {
+    const uniqueUsuarioIds = [...new Set(usuarioIds.filter(Boolean))];
+    if (uniqueUsuarioIds.length === 0) {
         return { data: [], error: null };
     }
     return supabase
         .from('capacitaciones_inscripciones')
-        .insert(
-            usuarioIds.map((usuarioId) => ({
+        .upsert(
+            uniqueUsuarioIds.map((usuarioId) => ({
                 capacitacion_id: capacitacionId,
                 usuario_id: usuarioId,
             })),
+            { onConflict: 'capacitacion_id,usuario_id', ignoreDuplicates: true },
         );
 }
 
@@ -828,6 +830,21 @@ export async function createCapacitacionIntento(payload: {
     aprobado: boolean;
 }) {
     return supabase.from('capacitaciones_intentos').insert([payload]);
+}
+
+// Envía respuestas y registra el intento con validaciones de negocio en backend.
+export async function submitCapacitacionAttempt(payload: {
+    capacitacion_id: string;
+    responses: Array<{
+        pregunta_id: string;
+        respuesta?: string;
+        respuesta_json?: string | null;
+    }>;
+}) {
+    return supabase.rpc('submit_capacitacion_attempt', {
+        p_capacitacion_id: payload.capacitacion_id,
+        p_respuestas: payload.responses,
+    });
 }
 
 // Encola notificaciones en email_outbox para envío posterior.

@@ -30,6 +30,10 @@ import {
   uploadCapacitacionMaterial,
 } from '../services/supabase';
 
+interface CapacitacionesProps {
+  userRole?: 'admin' | 'editor' | 'solo_lectura';
+}
+
 interface QuestionRow {
   id: string;
   question: string;
@@ -98,7 +102,8 @@ const emptyAttachments = (): AttachmentInput[] =>
   }));
 
 // Módulo principal de capacitaciones: lista sesiones, gestiona formularios, resultados y descargas.
-const Capacitaciones: React.FC = () => {
+const Capacitaciones: React.FC<CapacitacionesProps> = ({ userRole = 'admin' }) => {
+  const canManageCapacitaciones = userRole === 'admin';
   const [trainings, setTrainings] = useState<CapacitacionSummary[]>([]);
   const [isListLoading, setIsListLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -245,7 +250,7 @@ const Capacitaciones: React.FC = () => {
             respuesta: item.respuestaTexto,
           })),
         },
-        fileName: `${sanitizeSlug(detailSession.capacitacion ?? '')}-${sanitizeSlug(displayName)}-evaluacion`,
+        fileName: `${sanitizeSlug(detailSession.titulo ?? '')}-${sanitizeSlug(displayName)}-evaluacion`,
       };
     },
     [detailSession, participantResults, sanitizeSlug, normalizeResultEntry],
@@ -290,6 +295,7 @@ const Capacitaciones: React.FC = () => {
   );
   const [mailStatus, setMailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [mailError, setMailError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Recupera el listado general de capacitaciones para mostrar en el dashboard.
   const loadCapacitaciones = async () => {
@@ -305,8 +311,10 @@ const Capacitaciones: React.FC = () => {
 
   useEffect(() => {
     loadCapacitaciones();
-    loadUsuariosCatalogo();
-  }, []);
+    if (canManageCapacitaciones) {
+      loadUsuariosCatalogo();
+    }
+  }, [canManageCapacitaciones]);
 
   // Carga rápida del catálogo de usuarios disponible para asignar a capacitaciones.
   const loadUsuariosCatalogo = async () => {
@@ -369,6 +377,7 @@ const Capacitaciones: React.FC = () => {
     setQuestionnaireName('');
     setQuestions([emptyQuestion()]);
     setSelectedUsuarioIds([]);
+    setSaveError('');
   };
 
   // Registra las inscripciones en la tabla y encola notificaciones por correo para los usuarios asignados.
@@ -435,12 +444,14 @@ const Capacitaciones: React.FC = () => {
   };
 
   const startNew = () => {
+    if (!canManageCapacitaciones) return;
     resetFormFields();
     setEditingSession(null);
     setShowForm(true);
   };
 
   const startEdit = async (session: CapacitacionSummary) => {
+    if (!canManageCapacitaciones) return;
     setIsFormLoading(true);
     try {
       const { data } = await fetchCapacitacionDetail(session.id);
@@ -599,37 +610,54 @@ const Capacitaciones: React.FC = () => {
   };
 
   const prepareAttachmentsPayload = useCallback(async () => {
+    const failedUploads: string[] = [];
     const uploaded = await Promise.all(
       attachments.map(async (attachment, index) => {
         let url = attachment.url?.trim() || '';
+        const name =
+          attachment.name?.trim() ||
+          attachment.file?.name ||
+          `Archivo ${index + 1}`;
         if (attachment.file) {
           try {
             url = await uploadCapacitacionMaterial(attachment.file);
           } catch (uploadError) {
             console.error('Error subiendo el archivo adjunto', uploadError);
+            failedUploads.push(name);
           }
         }
-        const name =
-          attachment.name?.trim() ||
-          attachment.file?.name ||
-          `Archivo ${index + 1}`;
         return { name, url };
       }),
     );
-    return uploaded.filter((item) => item.url);
+    return {
+      items: uploaded.filter((item) => item.url),
+      failedUploads,
+    };
   }, [attachments]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
+    setSaveError('');
     setIsSaving(true);
-    const attachmentsPayload = await prepareAttachmentsPayload();
+    const attachmentResult = await prepareAttachmentsPayload();
+    if (attachmentResult.failedUploads.length > 0) {
+      setSaveError(
+        `No se pudieron subir los adjuntos: ${attachmentResult.failedUploads.join(', ')}.`,
+      );
+      setIsSaving(false);
+      return;
+    }
+    const attachmentsPayload = attachmentResult.items;
     let finalVideoUrl = videoLink.trim();
     if (videoFile) {
       try {
         finalVideoUrl = await uploadCapacitacionMaterial(videoFile);
       } catch (videoUploadError) {
         console.error('Error subiendo el video', videoUploadError);
+        setSaveError('No se pudo subir el video. Verifica el archivo e inténtalo nuevamente.');
+        setIsSaving(false);
+        return;
       }
     }
     const payload = {
@@ -682,12 +710,14 @@ const Capacitaciones: React.FC = () => {
       await loadCapacitaciones();
     } catch (error) {
       console.error('Error guardando la capacitación', error);
+      setSaveError('No se pudo guardar la capacitación. Inténtalo nuevamente.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleCancel = () => {
+    setSaveError('');
     resetFormFields();
     setEditingSession(null);
     setShowForm(false);
@@ -741,16 +771,22 @@ const Capacitaciones: React.FC = () => {
                 Revisa el estado de las planillas, accede a los usuarios inscriptos y arma nuevas sesiones cuando lo necesites.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={startNew}
-              className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/40 transition hover:bg-amber-600"
-            >
-              <Plus size={16} />
-              Crear capacitación
-            </button>
+            {canManageCapacitaciones ? (
+              <button
+                type="button"
+                onClick={startNew}
+                className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/40 transition hover:bg-amber-600"
+              >
+                <Plus size={16} />
+                Crear capacitación
+              </button>
+            ) : (
+              <p className="text-sm text-stone-500">
+                Ingresá al examen desde el botón "Rendir examen" de cada capacitación.
+              </p>
+            )}
           </header>
-          {mailStatus !== 'idle' && (
+          {canManageCapacitaciones && mailStatus !== 'idle' && (
             <div className="px-6 py-3 text-sm flex items-center gap-2">
               {mailStatus === 'sending' && <span className="text-amber-500">Enviando correos...</span>}
               {mailStatus === 'sent' && <span className="text-emerald-600">Correos enviados</span>}
@@ -826,28 +862,41 @@ const Capacitaciones: React.FC = () => {
                       <Eye size={16} />
                       Ver detalle
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => viewParticipants(session)}
-                      className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 transition hover:border-amber-300 hover:text-stone-900"
-                    >
-                      <Users size={16} />
-                      Usuarios inscriptos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(session)}
-                      className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                    {canManageCapacitaciones && (
+                      <button
+                        type="button"
+                        onClick={() => viewParticipants(session)}
+                        className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 transition hover:border-amber-300 hover:text-stone-900"
+                      >
+                        <Users size={16} />
+                        Usuarios inscriptos
+                      </button>
+                    )}
+                    <a
+                      href={`/capacitaciones/${session.id}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-700 transition hover:border-amber-500"
                     >
                       <BookOpenCheck size={16} />
-                      Editar
-                    </button>
+                      Rendir examen
+                    </a>
+                    {canManageCapacitaciones && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(session)}
+                        className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                      >
+                        <BookOpenCheck size={16} />
+                        Editar
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
               {!isListLoading && trainings.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-6 text-center text-sm text-stone-500">
-                  Aún no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.
+                  {canManageCapacitaciones
+                    ? 'Aún no hay capacitaciones registradas. Crea una nueva para trabajar con planillas oficiales.'
+                    : 'No hay capacitaciones disponibles para rendir en este momento.'}
                 </div>
               )}
             </div>
@@ -855,7 +904,7 @@ const Capacitaciones: React.FC = () => {
         </>
       )}
 
-      {showForm && (
+      {showForm && canManageCapacitaciones && (
         <section className="bg-white border border-stone-200 rounded-3xl shadow-sm space-y-6 p-6">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3 text-amber-500">
@@ -1142,7 +1191,9 @@ const Capacitaciones: React.FC = () => {
                 </div>
               </section>
 
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-100 pt-4">
+              <div className="border-t border-stone-100 pt-4 space-y-3">
+                {saveError && <p className="text-sm text-rose-600">{saveError}</p>}
+                <div className="flex flex-wrap items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={handleCancel}
@@ -1161,6 +1212,7 @@ const Capacitaciones: React.FC = () => {
                 >
                   {isSaving ? 'Guardando...' : 'Guardar capacitación'}
                 </button>
+                </div>
               </div>
             </form>
           )}

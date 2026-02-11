@@ -27,3 +27,5 @@ dist-ssr
 
 .env.desarrollo
 .env.produccion
+supabase/migrations/20260211_capacitaciones_hardening.sql
+.env
