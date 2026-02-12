@@ -143,6 +143,7 @@ export async function fetchInventarioItems() {
 // Registra una solicitud de cubiertas.
 export async function createCubiertaSolicitud(payload: {
     interno?: string;
+    estado?: string;
     solicitante?: string;
     motivo?: string;
     cantidad?: number;
@@ -161,6 +162,48 @@ export async function createCubiertaSolicitud(payload: {
 // Trae las solicitudes de cubiertas más recientes.
 export async function fetchCubiertaSolicitudes() {
     return supabase.from('cubiertas_solicitudes').select('*').order('created_at', { ascending: false });
+}
+
+// Finaliza una solicitud de cubiertas registrando cantidades y auditoría.
+export async function finalizeCubiertaSolicitud(
+    id: number | string,
+    payload: { entregadas: number; recapadas: number; auditComment: string },
+) {
+    const attempts = [
+        {
+            estado: 'FIN.',
+            ent: payload.entregadas,
+            rec: payload.recapadas,
+            comentarios: payload.auditComment,
+        },
+        {
+            estado: 'FIN.',
+            entregadas: payload.entregadas,
+            recapadas: payload.recapadas,
+            comentarios: payload.auditComment,
+        },
+        {
+            estado: 'FIN.',
+            comentarios: payload.auditComment,
+        },
+    ];
+
+    let lastError: any = null;
+    for (const updatePayload of attempts) {
+        const result = await supabase.from('cubiertas_solicitudes').update(updatePayload).eq('id', id);
+        if (!result.error) return result;
+        lastError = result.error;
+
+        const message = String(result.error?.message || '').toLowerCase();
+        const isUnknownColumn =
+            result.error?.code === '42703' ||
+            (message.includes('column') && message.includes('does not exist')) ||
+            message.includes('no existe la columna');
+
+        if (!isUnknownColumn) return result;
+    }
+
+    return { data: null, error: lastError };
 }
 
 // Cubiertas - recapadas
