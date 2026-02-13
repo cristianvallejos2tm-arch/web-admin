@@ -307,8 +307,8 @@ const App: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 md:ml-64 p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300 text-[15px]">
+        <div className="w-full">
           {activeTab === 'dashboard' && userData?.rol === 'admin' && <Dashboard />}
           {activeTab === 'vehicles' && <Vehicles />}
           {activeTab === 'checklists' && (

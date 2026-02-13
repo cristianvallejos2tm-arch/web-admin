@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, BarChart2, Loader2, Eye, X } from "lucide-react";
+import { Plus, BarChart2, Loader2, Eye, X, RefreshCw, ChevronRight } from "lucide-react";
 import WorkOrderForm from "./WorkOrderForm";
 import WorkOrderStats from "./WorkOrderStats";
 import { fetchWorkOrders, fetchVehiculos, fetchUsuariosLite, updateWorkOrder } from "../services/supabase";
@@ -7,6 +7,17 @@ import { fetchWorkOrders, fetchVehiculos, fetchUsuariosLite, updateWorkOrder } f
 const ESTADOS_PENDIENTES = ["abierta", "en_progreso", "pausada", "confirmada", "vencido"];
 const ESTADOS_FINALIZADAS = ["cerrada", "cancelada"];
 const PRIORIDADES = ["alta", "media", "baja", "critica"];
+const estadoLabel = (estado?: string) => {
+    const key = String(estado || "").toLowerCase();
+    if (key === "abierta") return "Pendiente";
+    if (key === "en_progreso") return "En Proceso";
+    if (key === "pausada") return "Pausada";
+    if (key === "confirmada") return "Confirmada";
+    if (key === "cerrada") return "Finalizada";
+    if (key === "cancelada") return "Anulada";
+    if (key === "vencido") return "Vencido";
+    return estado || "-";
+};
 
 const getOrderObservation = (order: any): string => {
     if (!order) return "-";
@@ -18,6 +29,34 @@ const getOrderObservation = (order: any): string => {
     ];
     const found = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
     return found ? String(found) : "-";
+};
+
+const priorityLabel = (value?: string) => {
+    const key = String(value || "media").toLowerCase();
+    if (key === "alta") return "Alta";
+    if (key === "baja") return "Baja";
+    if (key === "critica") return "Critica";
+    return "Media";
+};
+
+const tipoShort = (titulo?: string) => {
+    const raw = String(titulo || "").toLowerCase();
+    if (raw.includes("prevent")) return "PREV";
+    if (raw.includes("correct")) return "CORR";
+    if (raw.includes("predict")) return "PRED";
+    return (titulo || "-").slice(0, 4).toUpperCase();
+};
+
+const estadoBadgeClass = (estado?: string) => {
+    const key = String(estado || "").toLowerCase();
+    if (key === "abierta") return "bg-amber-400 text-white";
+    if (key === "en_progreso") return "bg-blue-500 text-white";
+    if (key === "confirmada") return "bg-cyan-600 text-white";
+    if (key === "pausada") return "bg-slate-500 text-white";
+    if (key === "cerrada") return "bg-emerald-500 text-white";
+    if (key === "cancelada") return "bg-rose-500 text-white";
+    if (key === "vencido") return "bg-red-700 text-white";
+    return "bg-slate-300 text-slate-700";
 };
 
 const WorkOrders: React.FC = () => {
@@ -139,7 +178,7 @@ const WorkOrders: React.FC = () => {
         return v?.base || "-";
     };
 
-    const handleInlineUpdate = async (id: string, payload: { estado?: string; prioridad?: string }) => {
+    const handleInlineUpdate = async (id: string, payload: { estado?: string; prioridad?: string; responsable_id?: string | null; km_realizado?: number | null }) => {
         setUpdatingId(id);
         const { error } = await updateWorkOrder(id, payload);
         setUpdatingId(null);
@@ -171,7 +210,7 @@ const WorkOrders: React.FC = () => {
             <option value="pausada">Pausada</option>
             <option value="confirmada">Confirmada</option>
             <option value="cerrada">Finalizada</option>
-            <option value="cancelada">Cancelada</option>
+            <option value="cancelada">Anulada</option>
             <option value="vencido">Vencido</option>
         </select>
     );
@@ -189,6 +228,39 @@ const WorkOrders: React.FC = () => {
                 </option>
             ))}
         </select>
+    );
+
+    const ResponsibleSelect = ({ order }: { order: any }) => (
+        <select
+            value={order.responsable_id || ""}
+            onChange={(e) => handleInlineUpdate(order.id, { responsable_id: e.target.value || null })}
+            disabled={updatingId === order.id}
+            className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-white min-w-[170px]"
+        >
+            <option value="">Sin responsable</option>
+            {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>
+                    {u.nombre || u.email}
+                </option>
+            ))}
+        </select>
+    );
+
+    const KmInput = ({ order }: { order: any }) => (
+        <input
+            type="number"
+            defaultValue={order.km_realizado ?? ""}
+            onBlur={(e) => {
+                const raw = e.target.value.trim();
+                const nextValue = raw === "" ? null : Number(raw);
+                const current = order.km_realizado ?? null;
+                if (current === nextValue) return;
+                handleInlineUpdate(order.id, { km_realizado: Number.isNaN(nextValue as number) ? null : nextValue });
+            }}
+            disabled={updatingId === order.id}
+            className="text-xs border border-slate-200 rounded px-2 py-1 bg-white w-24"
+            placeholder="0"
+        />
     );
 
     if (view === "new") {
@@ -272,7 +344,7 @@ const WorkOrders: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div className="w-full">
                 <div className="flex items-center justify-between mb-4 text-xs text-slate-500">
                     <span>
                         Mostrando {rows.length} registros de {currentTotal} ({view === "pendientes" ? "activos" : "finalizados"}).
@@ -333,40 +405,54 @@ const WorkOrders: React.FC = () => {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-slate-50">
+                            <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase"># OT</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Int.</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Base</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Creado</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Prioridad</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Estado</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Tipo</th>
-                                    <th className="px-4 py-2 text-left text-xs font-bold text-slate-600 uppercase">Observaciones</th>
-                                    <th className="px-4 py-2 text-right text-xs font-bold text-slate-600 uppercase">Detalle</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700"># OT</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Creado</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Int.</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Base</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Prior.</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Tipo</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Estado</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Motivo</th>
+                                    <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700">Responsable</th>
+                                    <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700"></th>
+                                    <th className="px-4 py-2 text-right text-sm font-semibold text-slate-700"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {rows.map((t) => (
-                                    <tr key={t.id} className="hover:bg-slate-50">
-                                        <td className="px-4 py-2 text-slate-900">{t.numero || "-"}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoInterno(t.vehiculo_id)}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{vehiculoBase(t.vehiculo_id)}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">
+                                    <tr key={t.id} className="bg-white hover:bg-slate-50">
+                                        <td className="px-4 py-2 text-slate-900 text-sm">{t.numero || "-"}</td>
+                                        <td className="px-4 py-2 text-slate-700 text-sm">
                                             {t.created_at ? new Date(t.created_at).toLocaleString() : "-"}
                                         </td>
-                                        <td className="px-4 py-2"><PrioritySelect order={t} /></td>
-                                        <td className="px-4 py-2 text-slate-700 uppercase text-xs">
-                                            <StatusSelect order={t} />
+                                        <td className="px-4 py-2 text-slate-800 text-sm">
+                
+                                            {vehiculoInterno(t.vehiculo_id)}
                                         </td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs">{t.titulo || "-"}</td>
-                                        <td className="px-4 py-2 text-slate-700 text-xs whitespace-pre-wrap">{getOrderObservation(t)}</td>
+                                        <td className="px-4 py-2 text-slate-800 text-sm">{vehiculoBase(t.vehiculo_id)}</td>
+                                        <td className="px-4 py-2 text-slate-800 text-sm font-semibold">{priorityLabel(t.prioridad)}</td>
+                                        <td className="px-4 py-2 text-slate-800 text-sm">{tipoShort(t.titulo)}</td>
+                                        <td className="px-4 py-2">
+                                            <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${estadoBadgeClass(t.estado)}`}>
+                                                {estadoLabel(t.estado)}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-800 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[520px]">
+                                            {getOrderObservation(t)}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <ResponsibleSelect order={t} />
+                                        </td>
+                                       
                                         <td className="px-4 py-2 text-right">
                                             <button
                                                 onClick={() => setSelected(t)}
-                                                className="text-slate-500 hover:text-slate-800 flex items-center gap-1 text-xs justify-end"
+                                                className="text-slate-600 hover:text-slate-900 inline-flex items-center justify-center"
+                                                title="Ver detalle"
                                             >
-                                                <Eye size={14} /> Ver
+                                                <ChevronRight size={20} />
                                             </button>
                                         </td>
                                     </tr>
@@ -418,7 +504,7 @@ const WorkOrders: React.FC = () => {
                             <X size={18} />
                         </button>
                         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <Eye size={18} className="text-slate-500" /> Detalle OT
+                            <Eye size={18} className="text-slate-500" /> Historial OT
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
                             <div>
@@ -431,6 +517,9 @@ const WorkOrders: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <span className="font-semibold">Estado:</span>
                                 <StatusSelect order={selected} />
+                            </div>
+                            <div>
+                                <span className="font-semibold">Estado (texto):</span> {estadoLabel(selected.estado)}
                             </div>
                             <div>
                                 <span className="font-semibold">Tipo:</span> {selected.titulo || "-"}
@@ -451,7 +540,16 @@ const WorkOrders: React.FC = () => {
                                 <span className="font-semibold">Vehiculo:</span> {vehiculoLabel(selected.vehiculo_id)}
                             </div>
                             <div>
-                                <span className="font-semibold">Responsable:</span> {usuarioLabel(selected.responsable_id)}
+                                <span className="font-semibold">Responsable:</span> <ResponsibleSelect order={selected} />
+                            </div>
+                            <div>
+                                <span className="font-semibold">KM realizado:</span> <KmInput order={selected} />
+                            </div>
+                            <div>
+                                <span className="font-semibold">Creado:</span> {selected.created_at ? new Date(selected.created_at).toLocaleString() : "-"}
+                            </div>
+                            <div>
+                                <span className="font-semibold">Actualizado:</span> {selected.updated_at ? new Date(selected.updated_at).toLocaleString() : "-"}
                             </div>
                         </div>
                     </div>

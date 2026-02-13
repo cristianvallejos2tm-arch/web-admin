@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Car, Calendar, User, AlertCircle, FileText, X, ClipboardList } from 'lucide-react';
-import { createTask, fetchVehiculos, fetchUsuariosLite } from '../services/supabase';
+import { createTask, fetchVehiculos, fetchUsuariosLite, fetchWorkOrdersLite } from '../services/supabase';
 
 interface TaskFormProps {
     onBack: () => void;
@@ -11,6 +11,7 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ onBack, onSaved }) => {
     const [form, setForm] = useState({
         vehiculoId: '',
+        workOrderId: '',
         prioridad: '',
         fecha: '',
         responsable: '',
@@ -20,13 +21,19 @@ const TaskForm: React.FC<TaskFormProps> = ({ onBack, onSaved }) => {
     const [saving, setSaving] = useState(false);
     const [vehiculos, setVehiculos] = useState<any[]>([]);
     const [usuarios, setUsuarios] = useState<any[]>([]);
+    const [workOrders, setWorkOrders] = useState<any[]>([]);
     const [showUserList, setShowUserList] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
-            const [{ data: vehs }, { data: users }] = await Promise.all([fetchVehiculos(), fetchUsuariosLite()]);
+            const [{ data: vehs }, { data: users }, { data: ots }] = await Promise.all([
+                fetchVehiculos(),
+                fetchUsuariosLite(),
+                fetchWorkOrdersLite(),
+            ]);
             setVehiculos(vehs || []);
             setUsuarios(users || []);
+            setWorkOrders((ots || []).filter((ot: any) => ot.estado !== 'cerrada' && ot.estado !== 'cancelada'));
         };
         loadData();
     }, []);
@@ -49,6 +56,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onBack, onSaved }) => {
             fecha_vencimiento: form.fecha || null,
             asignado_a: form.responsableId || null,
             vehiculo_id: form.vehiculoId || null,
+            work_order_id: form.workOrderId || null,
         });
         setSaving(false);
         if (error) {
@@ -91,7 +99,37 @@ const TaskForm: React.FC<TaskFormProps> = ({ onBack, onSaved }) => {
                     </select>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
+                            <ClipboardList size={14} className="text-slate-400" />
+                            Orden de trabajo
+                        </label>
+                        <select
+                            value={form.workOrderId}
+                            onChange={(e) => {
+                                const workOrderId = e.target.value;
+                                const selectedOrder = workOrders.find((ot) => ot.id === workOrderId);
+                                const responsable = usuarios.find((u) => u.id === selectedOrder?.responsable_id);
+                                setForm((prev) => ({
+                                    ...prev,
+                                    workOrderId,
+                                    vehiculoId: selectedOrder?.vehiculo_id || prev.vehiculoId,
+                                    responsableId: selectedOrder?.responsable_id || prev.responsableId,
+                                    responsable: selectedOrder?.responsable_id ? (responsable?.nombre || responsable?.email || '') : prev.responsable,
+                                }));
+                            }}
+                            className="w-full h-11 px-4 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
+                        >
+                            <option value="">Sin OT</option>
+                            {workOrders.map((ot) => (
+                                <option key={ot.id} value={ot.id}>
+                                    OT {ot.numero || 's/n'} - {ot.titulo || 'Sin titulo'}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="space-y-1.5">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
                             <AlertCircle size={14} className="text-slate-400" />

@@ -409,6 +409,7 @@ export async function createTask(payload: {
     fecha_vencimiento?: string | null;
     asignado_a?: string | null;
     vehiculo_id?: string | null;
+    work_order_id?: string | null;
 }) {
     return supabase.from('tareas').insert([payload]);
 }
@@ -419,8 +420,25 @@ export async function fetchTasks() {
 }
 
 // Actualiza el estado o prioridad de una tarea existente.
-export async function updateTask(id: string, payload: { estado?: string; prioridad?: string }) {
+export async function updateTask(
+    id: string,
+    payload: {
+        estado?: string;
+        prioridad?: string;
+        asignado_a?: string | null;
+        work_order_id?: string | null;
+    },
+) {
     return supabase.from('tareas').update(payload).eq('id', id);
+}
+
+// Lista ligera de OTs para combos y vinculación desde tareas.
+export async function fetchWorkOrdersLite() {
+    return supabase
+        .from('ordenes_trabajo')
+        .select('id,numero,titulo,estado,responsable_id,vehiculo_id')
+        .order('created_at', { ascending: false })
+        .limit(500);
 }
 
 // Ordenes de trabajo
@@ -536,6 +554,7 @@ export async function createWorkOrder(payload: {
     responsable_id?: string | null;
     presupuesto_url?: string | null;
     external_amount?: number | null;
+    km_realizado?: number | null;
 }) {
     return supabase.from('ordenes_trabajo').insert([payload]).select('id').single();
 }
@@ -554,6 +573,7 @@ export async function updateWorkOrder(id: string, payload: Partial<{
     responsable_id: string | null;
     presupuesto_url: string | null;
     external_amount: number | null;
+    km_realizado: number | null;
 }> ) {
     return supabase.from('ordenes_trabajo').update(payload).eq('id', id);
 }
@@ -675,7 +695,7 @@ export async function fetchMaintenances() {
 
 // Crea una orden de mantenimiento programada.
 export async function createMaintenance(payload: {
-    vehiculo_id: string;
+    vehiculo_id?: string | null;
     tipo: string;
     descripcion?: string | null;
     estado?: string;
@@ -700,6 +720,177 @@ export async function updateMaintenance(id: string, payload: Partial<{
 // Elimina un mantenimiento (uso lógico según reglas).
 export async function deleteMaintenance(id: string) {
     return supabase.from('mantenimientos').delete().eq('id', id);
+}
+
+// Mantenimientos v2 (planes + reglas + asignaciones + tareas)
+export interface MaintenancePlanCreatePayload {
+    nombre: string;
+    tipo: 'preventivo' | 'correctivo' | 'predictivo' | 'otro';
+    estado?: 'activo' | 'inactivo' | 'archivado';
+    auto_generate_work_order?: boolean;
+    auto_generate_tasks?: boolean;
+}
+
+export interface MaintenancePlanRulePayload {
+    rule_type: 'date_exact' | 'date_periodic' | 'hours' | 'km';
+    frequency_mode?: 'exacta' | 'periodica';
+    is_active?: boolean;
+    schedule_date?: string | null;
+    period_value?: number | null;
+    period_unit?: 'dias' | 'meses' | 'anios' | null;
+    trigger_value?: number | null;
+    warn_before_value?: number | null;
+    warn_before_unit?: 'dias' | 'horas' | 'km' | null;
+    next_due_at?: string | null;
+}
+
+export interface MaintenancePlanTaskPayload {
+    titulo: string;
+    descripcion?: string | null;
+    orden?: number;
+    requerido?: boolean;
+    estimated_minutes?: number | null;
+    activo?: boolean;
+}
+
+export async function fetchMaintenancePlanAssignments() {
+    return supabase
+        .from('v_maintenance_plan_assignments')
+        .select('*')
+        .order('plan_created_at', { ascending: false });
+}
+
+export async function fetchMaintenancePlansV2() {
+    return supabase
+        .from('maintenance_plans')
+        .select('*')
+        .order('created_at', { ascending: false });
+}
+
+export async function createMaintenancePlan(payload: MaintenancePlanCreatePayload) {
+    return supabase.from('maintenance_plans').insert([payload]).select('id').single();
+}
+
+export async function createMaintenancePlanRules(planId: string, rules: MaintenancePlanRulePayload[]) {
+    if (!rules.length) return { data: [], error: null };
+    return supabase.from('maintenance_plan_rules').insert(
+        rules.map((rule) => ({
+            ...rule,
+            plan_id: planId,
+        })),
+    );
+}
+
+export async function fetchMaintenancePlanRules() {
+    return supabase
+        .from('maintenance_plan_rules')
+        .select('*')
+        .order('created_at', { ascending: false });
+}
+
+export async function runDueMaintenanceProcessing() {
+    return supabase.rpc('process_due_maintenance');
+}
+
+export async function createMaintenancePlanTasks(planId: string, tasks: MaintenancePlanTaskPayload[]) {
+    if (!tasks.length) return { data: [], error: null };
+    return supabase.from('maintenance_plan_tasks').insert(
+        tasks.map((task, index) => ({
+            ...task,
+            plan_id: planId,
+            orden: typeof task.orden === 'number' ? task.orden : index + 1,
+        })),
+    );
+}
+
+export async function assignMaintenancePlanVehicles(planId: string, vehiculoIds: string[]) {
+    const uniqueVehiculoIds = [...new Set(vehiculoIds.filter(Boolean))];
+    if (!uniqueVehiculoIds.length) return { data: [], error: null };
+    return supabase.from('maintenance_plan_vehicles').upsert(
+        uniqueVehiculoIds.map((vehiculoId) => ({
+            plan_id: planId,
+            vehiculo_id: vehiculoId,
+            activo: true,
+        })),
+        {
+            onConflict: 'plan_id,vehiculo_id',
+            ignoreDuplicates: false,
+        },
+    );
+}
+
+export async function fetchVehicleMaintenanceAssignments(vehiculoId: string) {
+    return supabase
+        .from('maintenance_plan_vehicles')
+        .select('plan_id, activo')
+        .eq('vehiculo_id', vehiculoId);
+}
+
+export async function syncVehicleMaintenanceAssignments(vehiculoId: string, planIds: string[]) {
+    const uniquePlanIds = [...new Set(planIds.filter(Boolean))];
+
+    if (uniquePlanIds.length > 0) {
+        const { error: activateError } = await supabase
+            .from('maintenance_plan_vehicles')
+            .upsert(
+                uniquePlanIds.map((planId) => ({
+                    plan_id: planId,
+                    vehiculo_id: vehiculoId,
+                    activo: true,
+                })),
+                {
+                    onConflict: 'plan_id,vehiculo_id',
+                    ignoreDuplicates: false,
+                },
+            );
+        if (activateError) return { data: null, error: activateError };
+    }
+
+    const allResult = await supabase
+        .from('maintenance_plan_vehicles')
+        .select('plan_id')
+        .eq('vehiculo_id', vehiculoId);
+    if (allResult.error) return { data: null, error: allResult.error };
+
+    const allPlanIds = (allResult.data || []).map((row: any) => row.plan_id).filter(Boolean);
+    const toDeactivate = allPlanIds.filter((id: string) => !uniquePlanIds.includes(id));
+
+    if (toDeactivate.length > 0) {
+        const { error: deactivateError } = await supabase
+            .from('maintenance_plan_vehicles')
+            .update({ activo: false })
+            .eq('vehiculo_id', vehiculoId)
+            .in('plan_id', toDeactivate);
+        if (deactivateError) return { data: null, error: deactivateError };
+    }
+
+    return { data: { assigned: uniquePlanIds.length, deactivated: toDeactivate.length }, error: null };
+}
+
+export async function fetchVehicleMaintenanceExecutions(vehiculoId: string, limit = 50) {
+    return supabase
+        .from('maintenance_executions')
+        .select('id, status, due_at, created_at, closed_at, maintenance_plans(nombre, tipo), work_order_id')
+        .eq('vehiculo_id', vehiculoId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+}
+
+export async function updateMaintenancePlan(
+    id: string,
+    payload: Partial<{
+        nombre: string;
+        tipo: 'preventivo' | 'correctivo' | 'predictivo' | 'otro';
+        estado: 'activo' | 'inactivo' | 'archivado';
+        auto_generate_work_order: boolean;
+        auto_generate_tasks: boolean;
+    }>,
+) {
+    return supabase.from('maintenance_plans').update(payload).eq('id', id);
+}
+
+export async function deleteMaintenancePlan(id: string) {
+    return supabase.from('maintenance_plans').delete().eq('id', id);
 }
 
 // Capacitaciones

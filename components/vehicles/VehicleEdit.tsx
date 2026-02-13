@@ -10,6 +10,13 @@ interface VehicleEditProps {
 
 // Formulario completo para editar datos, estado y consumo de un vehículo, incluyendo foto.
 const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
+    const initialOperadoras = Array.isArray(vehicle?.operadoras) && vehicle.operadoras.length > 0
+        ? vehicle.operadoras
+        : String(vehicle?.op || '')
+            .split(',')
+            .map((value: string) => value.trim())
+            .filter(Boolean);
+
     const [form, setForm] = useState({
         id: vehicle?.id || '',
         patente: vehicle?.dominio || vehicle?.patente || '',
@@ -23,7 +30,7 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
         sector: vehicle?.sector || '',
         funcion: vehicle?.funcion || '',
         base: vehicle?.base || '',
-        operadoras: vehicle?.operadoras || [],
+        operadoras: initialOperadoras,
         odometro: vehicle?.km || vehicle?.kilometraje_actual || '',
         horometro: vehicle?.horometro || '',
         tipoComb: vehicle?.tipoComb || '',
@@ -62,7 +69,7 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
         } catch (err) {
             console.error('Error subiendo imagen', err);
         }
-        const operadoraPrincipal = form.operadoras[0] ?? null;
+        const operadorasValue = form.operadoras.length ? form.operadoras.join(', ') : null;
 
         await updateVehiculo(form.id, {
             patente: form.patente,
@@ -78,7 +85,7 @@ const VehicleEdit: React.FC<VehicleEditProps> = ({ vehicle, onBack }) => {
             funcion: form.funcion || null,
             estado: form.estado || null,
             num_int: form.interno || null,
-            op: operadoraPrincipal,
+            op: operadorasValue,
             horometro: form.horometro ? Number(form.horometro) : null,
             tipo_combustible: form.tipoComb || null,
             consumo_Km: form.consumoKm || null,

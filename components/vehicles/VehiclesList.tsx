@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export interface VehicleSummary {
@@ -111,17 +111,138 @@ const VehiclesList: React.FC<VehiclesListProps> = ({
     onPageChange,
     onRowsPerPageChange,
 }) => {
-    const [searchTerm, setSearchTerm] = useState('');
+    const [internalFilter, setInternalFilter] = useState('');
+    const [domainFilter, setDomainFilter] = useState('');
+    const [estadoFilter, setEstadoFilter] = useState('');
+    const [baseFilter, setBaseFilter] = useState('');
+    const [sectorFilter, setSectorFilter] = useState('');
+    const [funcionFilter, setFuncionFilter] = useState('');
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    const baseOptions = useMemo(
+        () => Array.from(new Set(vehicles.map((v) => v.base).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+        [vehicles],
+    );
+    const estadoOptions = useMemo(
+        () => Array.from(new Set(vehicles.map((v) => v.estado).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+        [vehicles],
+    );
+    const sectorOptions = useMemo(
+        () => Array.from(new Set(vehicles.map((v) => v.sector).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+        [vehicles],
+    );
+    const funcionOptions = useMemo(
+        () => Array.from(new Set(vehicles.map((v) => v.funcion).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+        [vehicles],
+    );
+
     const filteredVehicles = useMemo(() => {
-        if (!searchTerm.trim()) return vehicles;
-        const term = searchTerm.trim().toLowerCase();
-        return vehicles.filter((vehicle) =>
-            `${vehicle.internalNumber} ${vehicle.dominio} ${vehicle.modelo} ${vehicle.base}`.toLowerCase().includes(term)
-        );
-    }, [vehicles, searchTerm]);
+        return vehicles.filter((vehicle) => {
+            const internalOk = !internalFilter.trim()
+                || vehicle.internalNumber.toLowerCase().includes(internalFilter.trim().toLowerCase());
+            const domainOk = !domainFilter.trim()
+                || vehicle.dominio.toLowerCase().includes(domainFilter.trim().toLowerCase());
+            const estadoOk = !estadoFilter || vehicle.estado === estadoFilter;
+            const baseOk = !baseFilter || vehicle.base === baseFilter;
+            const sectorOk = !sectorFilter || vehicle.sector === sectorFilter;
+            const funcionOk = !funcionFilter || vehicle.funcion === funcionFilter;
+            return internalOk && domainOk && estadoOk && baseOk && sectorOk && funcionOk;
+        });
+    }, [vehicles, internalFilter, domainFilter, estadoFilter, baseFilter, sectorFilter, funcionFilter]);
+
+    useEffect(() => {
+        onPageChange(1);
+    }, [internalFilter, domainFilter, estadoFilter, baseFilter, sectorFilter, funcionFilter, onPageChange]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(filteredVehicles.length / rowsPerPage));
+        if (page > totalPages) onPageChange(totalPages);
+    }, [filteredVehicles.length, rowsPerPage, page, onPageChange]);
+
+    const paginatedVehicles = useMemo(() => {
+        const from = (page - 1) * rowsPerPage;
+        const to = from + rowsPerPage;
+        return filteredVehicles.slice(from, to);
+    }, [filteredVehicles, page, rowsPerPage]);
+
+    const exportToCsv = () => {
+        const headers = ['Interno', 'Dominio', 'Estado', 'Kilometraje', 'Horometro', 'Ano', 'Base', 'Sector', 'Funcion'];
+        const rows = filteredVehicles.map((vehicle) => [
+            vehicle.internalNumber || '',
+            vehicle.dominio || '',
+            vehicle.estado || '',
+            String(vehicle.km || 0),
+            String(vehicle.horometro || 0),
+            vehicle.anio || '',
+            vehicle.base || '',
+            vehicle.sector || '',
+            vehicle.funcion || '',
+        ]);
+        const csv = [headers, ...rows]
+            .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `vehiculos_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const exportToPdf = () => {
+        const rowsHtml = filteredVehicles
+            .map(
+                (vehicle) => `
+                <tr>
+                    <td>${vehicle.internalNumber || '-'}</td>
+                    <td>${vehicle.dominio || '-'}</td>
+                    <td>${vehicle.estado || '-'}</td>
+                    <td>${(vehicle.km || 0).toLocaleString()}</td>
+                    <td>${(vehicle.horometro || 0).toLocaleString()}</td>
+                    <td>${vehicle.anio || '-'}</td>
+                    <td>${vehicle.base || '-'}</td>
+                    <td>${vehicle.sector || '-'}</td>
+                    <td>${vehicle.funcion || '-'}</td>
+                </tr>
+            `,
+            )
+            .join('');
+        const printWindow = window.open('', '_blank', 'width=1100,height=800');
+        if (!printWindow) return;
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Listado de Vehiculos</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 16px; }
+                        h1 { font-size: 18px; margin-bottom: 12px; }
+                        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                        th, td { border: 1px solid #d1d5db; padding: 6px; text-align: left; }
+                        th { background: #f3f4f6; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Listado de Vehiculos</h1>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Interno</th><th>Dominio</th><th>Estado</th><th>Kilometraje</th><th>Horometro</th><th>Ano</th><th>Base</th><th>Sector</th><th>Funcion</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    };
 
     return (
         <div className="space-y-6">
@@ -171,18 +292,128 @@ const VehiclesList: React.FC<VehiclesListProps> = ({
                         <span className="text-sm text-slate-600">registros</span>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <label className="text-sm text-slate-600">Buscar:</label>
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="px-3 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-                        />
-                        <button className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors">Excel</button>
-                        <button className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors">Pdf</button>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <button
+                            onClick={() => setFiltersOpen((prev) => !prev)}
+                            className="px-3 py-1.5 bg-slate-200 text-slate-700 text-sm font-medium rounded hover:bg-slate-300 transition-colors"
+                        >
+                            {filtersOpen ? 'Ocultar filtros' : 'Mostrar filtros'}
+                        </button>
+                        <button
+                            onClick={exportToCsv}
+                            className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors"
+                        >
+                            Excel
+                        </button>
+                        <button
+                            onClick={exportToPdf}
+                            className="px-3 py-1.5 bg-cyan-500 text-white text-sm font-medium rounded hover:bg-cyan-600 transition-colors"
+                        >
+                            Pdf
+                        </button>
                     </div>
                 </div>
+
+                {filtersOpen && (
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Interno</label>
+                            <input
+                                type="text"
+                                value={internalFilter}
+                                onChange={(e) => setInternalFilter(e.target.value)}
+                                placeholder="Ej: 39"
+                                className="px-3 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Dominio</label>
+                            <input
+                                type="text"
+                                value={domainFilter}
+                                onChange={(e) => setDomainFilter(e.target.value)}
+                                placeholder="Ej: AA123BB"
+                                className="px-3 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Estado</label>
+                            <select
+                                value={estadoFilter}
+                                onChange={(e) => setEstadoFilter(e.target.value)}
+                                className="px-2 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            >
+                                <option value="">Todos</option>
+                                {estadoOptions.map((estado) => (
+                                    <option key={estado} value={estado}>
+                                        {estado}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Base</label>
+                            <select
+                                value={baseFilter}
+                                onChange={(e) => setBaseFilter(e.target.value)}
+                                className="px-2 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            >
+                                <option value="">Todas</option>
+                                {baseOptions.map((base) => (
+                                    <option key={base} value={base}>
+                                        {base}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Sector</label>
+                            <select
+                                value={sectorFilter}
+                                onChange={(e) => setSectorFilter(e.target.value)}
+                                className="px-2 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            >
+                                <option value="">Todas</option>
+                                {sectorOptions.map((sector) => (
+                                    <option key={sector} value={sector}>
+                                        {sector}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">Funcion</label>
+                            <select
+                                value={funcionFilter}
+                                onChange={(e) => setFuncionFilter(e.target.value)}
+                                className="px-2 py-1 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                            >
+                                <option value="">Todas</option>
+                                {funcionOptions.map((funcion) => (
+                                    <option key={funcion} value={funcion}>
+                                        {funcion}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-600">&nbsp;</label>
+                            <button
+                                onClick={() => {
+                                    setInternalFilter('');
+                                    setDomainFilter('');
+                                    setEstadoFilter('');
+                                    setBaseFilter('');
+                                    setSectorFilter('');
+                                    setFuncionFilter('');
+                                }}
+                                className="w-full px-3 py-1.5 bg-slate-200 text-slate-700 text-sm font-medium rounded hover:bg-slate-300 transition-colors"
+                            >
+                                Limpiar filtros
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="overflow-x-auto min-h-[400px]">
                     <div className="relative">
@@ -208,14 +439,14 @@ const VehiclesList: React.FC<VehiclesListProps> = ({
                                             Cargando vehiculos...
                                         </td>
                                     </tr>
-                                ) : filteredVehicles.length === 0 ? (
+                                ) : paginatedVehicles.length === 0 ? (
                                     <tr>
                                         <td colSpan={10} className="px-4 py-6 text-center text-sm text-slate-500">
                                             No hay vehiculos registrados.
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredVehicles.map((vehicle) => (
+                                    paginatedVehicles.map((vehicle) => (
                                         <tr key={vehicle.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
                                             <td className="px-4 py-3 text-sm font-semibold text-slate-900">{vehicle.internalNumber}</td>
                                             <td className="px-4 py-3 text-sm text-slate-700">{vehicle.dominio}</td>
@@ -270,7 +501,7 @@ const VehiclesList: React.FC<VehiclesListProps> = ({
                     </div>
                     <div className="p-2">
                         <PaginationControls
-                            total={totalCount}
+                            total={filteredVehicles.length}
                             page={page}
                             rowsPerPage={rowsPerPage}
                             onPageChange={onPageChange}

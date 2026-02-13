@@ -17,6 +17,12 @@ const getTodayIso = () => {
     return local.toISOString().slice(0, 10);
 };
 
+const parseOperadoras = (value?: string | null) =>
+    String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
 const VehiclesModule: React.FC = () => {
     const [vehicles, setVehicles] = useState<VehicleSummary[]>([]);
     const [loading, setLoading] = useState(false);
@@ -30,10 +36,7 @@ const VehiclesModule: React.FC = () => {
 
     const loadVehicles = useCallback(async () => {
         setLoading(true);
-        const { data, count, error } = await fetchVehiculos({
-            page,
-            limit: rowsPerPage,
-        });
+        const { data, count, error } = await fetchVehiculos();
         if (error) {
             console.error('Error al cargar vehiculos', error);
         }
@@ -60,14 +63,14 @@ const VehiclesModule: React.FC = () => {
                 capacidad: v.capacidat_Tanque || '',
                 observaciones: v.observaciones || '',
                 caracteristicas: v.caracteristicas_equipo || '',
-                operadoras: v.op ? [v.op] : [],
+                operadoras: parseOperadoras(v.op),
                 foto_url: v.foto_url || null,
             }));
             setVehicles(mapped);
         }
-        setTotalCount(count ?? 0);
+        setTotalCount(count ?? data?.length ?? 0);
         setLoading(false);
-    }, [page, rowsPerPage]);
+    }, []);
 
     useEffect(() => {
         loadVehicles();
@@ -147,14 +150,14 @@ const VehiclesModule: React.FC = () => {
         setView('edit');
     };
 
-    const handlePageChange = (newPage: number) => {
+    const handlePageChange = useCallback((newPage: number) => {
         setPage(newPage);
-    };
+    }, []);
 
-    const handleRowsPerPageChange = (limit: number) => {
+    const handleRowsPerPageChange = useCallback((limit: number) => {
         setRowsPerPage(limit);
         setPage(1);
-    };
+    }, []);
 
     const handleViewNew = () => {
         setSelectedVehicle(null);
@@ -162,7 +165,15 @@ const VehiclesModule: React.FC = () => {
     };
 
     if (view === 'detail' && selectedVehicle) {
-        return <VehicleDetail vehicle={selectedVehicle} onBack={handleBackToList} />;
+        return (
+            <VehicleDetail
+                vehicle={selectedVehicle}
+                onBack={handleBackToList}
+                onEdit={() => handleViewEdit(selectedVehicle)}
+                onWorkOrder={() => handleViewWorkOrder(selectedVehicle)}
+                onMaintenanceAssign={() => handleViewMaintenanceAssign(selectedVehicle)}
+            />
+        );
     }
 
     if (view === 'workOrder' && selectedVehicle) {

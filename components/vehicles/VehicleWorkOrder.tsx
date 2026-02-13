@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { createWorkOrder, fetchUsuariosLite, fetchWorkOrders, updateWorkOrder } from '../../services/supabase';
 import type { VehicleSummary } from './VehiclesList';
@@ -17,7 +17,6 @@ const getOrderObservation = (order: any): string => {
 
 const ESTADOS = ['abierta', 'en_progreso', 'pausada', 'confirmada', 'cerrada', 'cancelada', 'vencido'];
 const PRIORIDADES = ['alta', 'media', 'baja', 'critica'];
-const norm = (value: unknown) => String(value ?? '').toLowerCase();
 
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : '-');
 
@@ -50,7 +49,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
         trabajo: '',
     });
 
-    const loadData = async (nextPage = page, nextLimit = rowsPerPage) => {
+    const loadData = async (nextPage = page, nextLimit = rowsPerPage, searchTerm = search) => {
         setLoading(true);
         const [{ data: dataOrders, count, error }, { data: users }] = await Promise.all([
             fetchWorkOrders({
@@ -58,6 +57,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
                 limit: nextLimit,
                 estados: ESTADOS,
                 vehiculoId: vehicle.id,
+                search: searchTerm,
             }),
             fetchUsuariosLite(),
         ]);
@@ -78,14 +78,6 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
         setPage(1);
     }, [vehicle.id]);
 
-    const filtered = useMemo(() => {
-        const term = norm(search.trim());
-        if (!term) return orders;
-        return orders.filter((o) =>
-            norm(`${o.numero ?? ''} ${o.titulo ?? ''} ${o.descripcion ?? ''} ${o.estado ?? ''} ${vehicle.internalNumber ?? ''} ${vehicle.base ?? ''}`).includes(term),
-        );
-    }, [orders, search, vehicle.base, vehicle.internalNumber]);
-
     const totalPages = Math.max(1, Math.ceil(totalCount / rowsPerPage));
 
     const responsableLabel = (id?: string | null) => {
@@ -97,13 +89,13 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
     const handlePageChange = (nextPage: number) => {
         const safePage = Math.max(1, Math.min(totalPages, nextPage));
         setPage(safePage);
-        loadData(safePage, rowsPerPage);
+        loadData(safePage, rowsPerPage, search);
     };
 
     const handleRowsChange = (nextLimit: number) => {
         setRowsPerPage(nextLimit);
         setPage(1);
-        loadData(1, nextLimit);
+        loadData(1, nextLimit, search);
     };
 
     const handleInlineUpdate = async (id: string, payload: { estado?: string; prioridad?: string }) => {
@@ -151,9 +143,17 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
             fechaFin: '',
             trabajo: '',
         });
-        await loadData(1, rowsPerPage);
+        await loadData(1, rowsPerPage, search);
         setPage(1);
     };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setPage(1);
+            loadData(1, rowsPerPage, search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     return (
         <div className="space-y-6">
@@ -302,7 +302,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
                         <Loader2 size={16} className="animate-spin" />
                         Cargando ordenes...
                     </div>
-                ) : filtered.length === 0 ? (
+                ) : orders.length === 0 ? (
                     <div className="text-sm text-slate-500">No hay ordenes para este vehiculo.</div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -321,7 +321,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filtered.map((order) => (
+                                {orders.map((order) => (
                                     <tr key={order.id} className="hover:bg-slate-50">
                                         <td className="px-4 py-2">{order.numero || '-'}</td>
                                         <td className="px-4 py-2">{formatDate(order.created_at)}</td>

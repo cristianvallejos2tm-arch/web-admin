@@ -103,7 +103,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
         } catch (err) {
             console.error('Error subiendo imagen', err);
         }
-        const operadoraPrincipal = form.operadoras[0] ?? null;
+        const operadorasValue = form.operadoras.length ? form.operadoras.join(', ') : null;
 
         await createVehiculo({
             patente: form.patente,
@@ -119,7 +119,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ onBack }) => {
             funcion: form.funcion || null,
             estado: form.estado || null,
             num_int: form.interno || null,
-            op: operadoraPrincipal,
+            op: operadorasValue,
             horometro: form.horometro ? Number(form.horometro) : null,
             tipo_combustible: form.tipoComb || null,
             consumo_Km: form.consumoKmLt || null,

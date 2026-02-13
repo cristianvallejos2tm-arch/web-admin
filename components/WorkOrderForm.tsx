@@ -14,7 +14,6 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         responsableId: '',
         prioridad: '',
         tipo: '',
-        estado: 'abierta',
         fechaVto: '',
         ingresoFecha: '',
         ingresoHora: '',
@@ -141,7 +140,7 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
         const fecha_inicio = buildDateTime(form.ingresoFecha, form.ingresoHora, form.ingresoMin);
         const fecha_fin = buildDateTime(form.salidaFecha || form.fechaVto, form.salidaHora, form.salidaMin);
         const prioridadValue = (form.prioridad || 'media').toLowerCase();
-        const estadoValue = mode === 'confirm' ? 'abierta' : (form.estado || 'abierta');
+        const estadoValue = 'abierta';
         const { data, error } = await createWorkOrder({
             titulo: form.tipo,
             descripcion: `${form.trabajo}${form.fueraServicio === 'si' ? ' | Fuera de servicio' : ''}`,
@@ -302,18 +301,11 @@ const WorkOrderForm: React.FC<WorkOrderFormProps> = ({ onBack }) => {
                     <div className="space-y-1.5">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
                             <ClipboardList size={14} className="text-slate-400" />
-                            Estado Ord. Trabajo
+                            Estado inicial
                         </label>
-                        <select
-                            value={form.estado}
-                            onChange={(e) => setForm({ ...form, estado: e.target.value })}
-                            className="w-full h-11 px-4 text-sm border-slate-200 bg-slate-50/50 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 transition-all"
-                        >
-                            <option value="abierta">Pendiente</option>
-                            <option value="en_progreso">En Proceso</option>
-                            <option value="pausada">Pausada</option>
-                            <option value="cerrada">Finalizada</option>
-                        </select>
+                        <div className="w-full h-11 px-4 text-sm border border-slate-200 bg-slate-100 rounded-lg text-slate-700 flex items-center">
+                            Pendiente
+                        </div>
                     </div>
                 </div>
 
