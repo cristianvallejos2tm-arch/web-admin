@@ -137,6 +137,27 @@ const App: React.FC = () => {
     loadSession();
   }, []);
 
+  // Fuerza relogin al expirar el token (sin autorefresh).
+  useEffect(() => {
+    const checkTokenExpiry = async () => {
+      const { data } = await supabase.auth.getSession();
+      const exp = data?.session?.expires_at;
+      if (!exp) return;
+      if (Date.now() >= exp * 1000) {
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        setUserData(null);
+        setLoginForm({ username: '', password: '' });
+        setActiveTab('dashboard');
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(TAB_KEY);
+      }
+    };
+
+    const timer = window.setInterval(checkTokenExpiry, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   // Cambia la pestaña activa y la persiste en localStorage para la próxima visita.
   const handleTabChange = (tab: string) => {
     if (tab === 'dashboard' && userData?.rol !== 'admin') return;
@@ -318,7 +339,7 @@ const App: React.FC = () => {
           )}
           {activeTab === 'tasks' && <Tasks />}
           {activeTab === 'workorders' && <WorkOrders />}
-          {activeTab === 'shift' && <ShiftChange userName={userData?.nombre || userData?.email || ''} />}
+          {activeTab === 'shift' && <ShiftChange userName={userData?.nombre || userData?.email || ''} userRole={userData?.rol} />}
           {activeTab === 'maintenance' && <Maintenance />}
           {activeTab === 'lubricantes' && <Lubricants />}
           {activeTab === 'cubiertas' && <Tires />}

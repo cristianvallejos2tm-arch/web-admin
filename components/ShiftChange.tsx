@@ -17,6 +17,7 @@ interface ShiftChangeData {
 
 interface ShiftChangeProps {
   userName?: string;
+  userRole?: 'admin' | 'editor' | 'solo_lectura' | string;
 }
 
 const parseNovedades = (raw: any) => {
@@ -155,10 +156,11 @@ const extractObservations = (novedades: any, resumen?: string | null) => {
 };
 
 // Lista cambios de turno, refresca en tiempo real y permite generar/reportar cada turno.
-const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
+const ShiftChange: React.FC<ShiftChangeProps> = ({ userName, userRole }) => {
+  const canViewList = userRole === 'admin';
   const [searchTerm, setSearchTerm] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
+  const [view, setView] = useState<'list' | 'new' | 'detail'>(canViewList ? 'list' : 'new');
   const [shifts, setShifts] = useState<ShiftChangeData[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -188,6 +190,7 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
   };
 
   useEffect(() => {
+    if (!canViewList) return;
     if (view !== 'list') return;
 
     loadData();
@@ -211,7 +214,14 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       supabase.removeChannel(channel);
     };
-  }, [view]);
+  }, [view, canViewList]);
+
+  useEffect(() => {
+    if (!canViewList && view !== 'new') {
+      setView('new');
+      setSelected(null);
+    }
+  }, [canViewList, view]);
 
   const formatUserName = (id?: string | null) => {
     if (!id) return '-';
@@ -229,14 +239,16 @@ const ShiftChange: React.FC<ShiftChangeProps> = ({ userName }) => {
       <ShiftChangeForm
         userName={userName}
         onBack={() => {
-          setView('list');
-          loadData();
+          if (canViewList) {
+            setView('list');
+            loadData();
+          }
         }}
       />
     );
   }
 
-  if (view === 'detail' && selected) {
+  if (canViewList && view === 'detail' && selected) {
     const novedades = parseNovedades(selected.novedades);
     const remolqueSnapshot = novedades?.trailer_snapshot;
     const legacyRemolque = novedades?.remolque;

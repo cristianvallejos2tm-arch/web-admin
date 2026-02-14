@@ -2,13 +2,32 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const supabaseProjectRef = (() => {
+    try {
+        const host = new URL(supabaseUrl).hostname;
+        return host.split('.')[0] || 'default';
+    } catch {
+        return 'default';
+    }
+})();
+const storageKey = `supabase-web-admin-session-${supabaseProjectRef}`;
+
+if (typeof window !== 'undefined') {
+    const legacyKey = 'supabase-web-admin-session';
+    const legacyValue = window.localStorage.getItem(legacyKey);
+    const currentValue = window.localStorage.getItem(storageKey);
+    if (legacyValue && !currentValue) {
+        window.localStorage.setItem(storageKey, legacyValue);
+    }
+    window.localStorage.removeItem(legacyKey);
+}
 
 // Persistimos la sesión para evitar volver al login tras un refresh
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
         persistSession: true,
-        autoRefreshToken: true,
-        storageKey: 'supabase-web-admin-session',
+        autoRefreshToken: false,
+        storageKey,
     },
 });
 
@@ -35,8 +54,16 @@ export async function fetchUnidades() {
 
 // Regresa id, nombre y flags de proveedores para combos ligeros.
 export async function fetchProveedoresLite() {
-    // Trae sólo lo necesario para los combos de selección
-    return supabase.from('proveedores').select('id,nombre,tipo,es_externo,es_local').order('nombre');
+    // Consulta mínima estable: evita errores 400 cuando columnas opcionales no existen.
+    const result = await supabase.from('proveedores').select('id,nombre').order('nombre');
+    if (result.error) return result as any;
+    const normalized = (result.data || []).map((p: any) => ({
+        ...p,
+        tipo: null,
+        es_externo: false,
+        es_local: false,
+    }));
+    return { data: normalized, error: null } as any;
 }
 
 // Devuelve usuarios básicos con id, nombre, email y base para filtros ligeros.
@@ -125,11 +152,13 @@ export async function createInventarioItem(payload: {
     stock?: number;
     stock_minimo?: number;
     activo?: boolean;
+    sku?: string | null;
     proveedor?: string | null;
     comprobante?: string | null;
     iva?: string | null;
     fecha_ingreso?: string | null;
     deposito?: string | null;
+    precio_unidad?: number | null;
 }) {
     return supabase.from('inventario_items').insert([payload]).select('id').single();
 }
@@ -137,6 +166,145 @@ export async function createInventarioItem(payload: {
 // Lista los ítems de inventario ordenados por creación.
 export async function fetchInventarioItems() {
     return supabase.from('inventario_items').select('*').order('created_at', { ascending: false });
+}
+
+const isMissingRelation = (error: any) => {
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        error?.code === '42P01' ||
+        message.includes('relation') && message.includes('does not exist') ||
+        message.includes('no existe la relacion')
+    );
+};
+
+const isUnknownColumn = (error: any) => {
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        error?.code === '42703' ||
+        (message.includes('column') && message.includes('does not exist')) ||
+        message.includes('no existe la columna')
+    );
+};
+
+// Trae salidas de inventario desde la tabla disponible en el proyecto.
+export async function fetchInventarioSalidas() {
+    const fromSalidas = await supabase
+        .from('inventario_salidas')
+        .select('*')
+        .order('created_at', { ascending: false });
+    if (!fromSalidas.error) return fromSalidas;
+    if (!isMissingRelation(fromSalidas.error)) return fromSalidas;
+
+    const fromMovimientos = await supabase
+        .from('inventario_movimientos')
+        .select('*')
+        .eq('tipo', 'salida')
+        .order('created_at', { ascending: false });
+    return fromMovimientos;
+}
+
+// Registra una salida en la tabla disponible de inventario.
+export async function createInventarioSalida(payload: {
+    item_id?: string | number | null;
+    producto?: string | null;
+    fecha?: string | null;
+    interno?: string | null;
+    solicitado?: string | null;
+    cantidad: number;
+    unidad?: string | null;
+    observaciones?: string | null;
+}) {
+    const attempts: Array<{ table: 'inventario_salidas' | 'inventario_movimientos'; row: Record<string, any> }> = [
+        {
+            table: 'inventario_salidas',
+            row: {
+                item_id: payload.item_id ?? null,
+                producto: payload.producto ?? null,
+                fecha: payload.fecha ?? null,
+                interno: payload.interno ?? null,
+                solicitado: payload.solicitado ?? null,
+                cantidad: payload.cantidad,
+                unidad: payload.unidad ?? null,
+                observaciones: payload.observaciones ?? null,
+            },
+        },
+        {
+            table: 'inventario_salidas',
+            row: {
+                item_id: payload.item_id ?? null,
+                producto: payload.producto ?? null,
+                fecha: payload.fecha ?? null,
+                interno: payload.interno ?? null,
+                solicitante: payload.solicitado ?? null,
+                cantidad: payload.cantidad,
+                unidad: payload.unidad ?? null,
+                observaciones: payload.observaciones ?? null,
+            },
+        },
+        {
+            table: 'inventario_movimientos',
+            row: {
+                item_id: payload.item_id ?? null,
+                tipo: 'salida',
+                fecha: payload.fecha ?? null,
+                interno: payload.interno ?? null,
+                solicitado: payload.solicitado ?? null,
+                cantidad: payload.cantidad,
+                unidad: payload.unidad ?? null,
+                observaciones: payload.observaciones ?? null,
+            },
+        },
+    ];
+
+    let lastResult: any = null;
+    for (const attempt of attempts) {
+        const result = await supabase.from(attempt.table).insert([attempt.row]).select('id').single();
+        if (!result.error) return result;
+        lastResult = result;
+        if (!isMissingRelation(result.error) && !isUnknownColumn(result.error)) return result;
+    }
+    return lastResult;
+}
+
+// Actualiza stock de un item de inventario.
+export async function updateInventarioItemStock(itemId: string | number, stock: number) {
+    return supabase
+        .from('inventario_items')
+        .update({ stock })
+        .eq('id', itemId);
+}
+
+// Actualiza un ítem de inventario por id.
+export async function updateInventarioItem(
+    itemId: string | number,
+    payload: Partial<{
+        nombre: string;
+        categoria: string | null;
+        unidad: string;
+        stock: number;
+        stock_minimo: number;
+        activo: boolean;
+        sku: string | null;
+        proveedor: string | null;
+        comprobante: string | null;
+        iva: string | null;
+        fecha_ingreso: string | null;
+        deposito: string | null;
+        precio_unidad: number | null;
+    }>,
+) {
+    return supabase
+        .from('inventario_items')
+        .update(payload)
+        .eq('id', itemId);
+}
+
+// Elimina un ítem de inventario por id.
+export async function deleteInventarioItem(itemId: string | number) {
+    return supabase
+        .from('inventario_items')
+        .delete()
+        .eq('id', itemId);
 }
 
 // Cubiertas - solicitudes
@@ -1092,3 +1260,4 @@ export async function queueCapacitacionNotifications(
         .from('email_outbox')
         .insert(entries.map((entry) => ({ ...entry, status: 'PENDING' })));
 }
+

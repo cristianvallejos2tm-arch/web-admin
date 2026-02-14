@@ -39,3 +39,4 @@ supabase/migrations/20260212_tasks_sync_responsable_from_workorder.sql
 supabase/migrations/20260212_tasks_workorder_link_and_sync.sql
 supabase/migrations/20260212_workorders_use_maintenance_type_title.sql
 supabase/migrations/20260213_workorders_km_realizado.sql
+supabase/migrations/20260213_inventario_salidas.sql

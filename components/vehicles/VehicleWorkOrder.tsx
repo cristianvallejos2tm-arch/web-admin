@@ -118,7 +118,7 @@ const VehicleWorkOrder: React.FC<VehicleWorkOrderProps> = ({ vehicle, onBack }) 
         }
         setSaving(true);
         const { error } = await createWorkOrder({
-            numero: null,
+            
             titulo: form.tipo,
             descripcion: form.trabajo.trim(),
             estado: form.estado,

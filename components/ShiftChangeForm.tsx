@@ -1,5 +1,5 @@
 // ShiftChangeForm.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createShiftChange, fetchVehiculos, supabase } from '../services/supabase';
 
 interface ShiftChangeFormProps {
@@ -123,6 +123,10 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [errorVehiculos, setErrorVehiculos] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const submitLockRef = useRef(false);
+  const initialSectionsRef = useRef<ChecklistSection[] | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState('');
 
   // Remolque / arrastre
@@ -285,6 +289,30 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
 
   const isGeneralSection = (title: string) => GENERAL_TITLES.includes(title);
 
+  const cloneSections = (src: ChecklistSection[]) =>
+    src.map((section) => ({
+      ...section,
+      items: section.items.map((it) => ({ ...it })),
+    }));
+
+  const resetFormState = () => {
+    const now = new Date();
+    setDate(now.toISOString().slice(0, 10));
+    setHour(now.getHours().toString().padStart(2, '0'));
+    setMinute(now.getMinutes().toString().padStart(2, '0'));
+    setVehicle('');
+    setVehicleSearch('');
+    setTrailer('');
+    setTrailerSearch('');
+    setKm('');
+    setHs('');
+    setObservations('');
+    setEnabledSections({});
+    if (initialSectionsRef.current) {
+      setSections(cloneSections(initialSectionsRef.current));
+    }
+  };
+
   useEffect(() => {
     const loadUser = async () => {
       const { data: authData } = await supabase.auth.getUser();
@@ -342,6 +370,12 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   useEffect(() => {
     if (userName) setDriver(userName);
   }, [userName]);
+
+  useEffect(() => {
+    if (!initialSectionsRef.current && sections.length > 0) {
+      initialSectionsRef.current = cloneSections(sections);
+    }
+  }, [sections]);
 
   useEffect(() => {
     const now = new Date();
@@ -500,7 +534,10 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
   };
 
   const handleSave = async () => {
+    if (saving || submitLockRef.current) return;
+    submitLockRef.current = true;
     setSaving(true);
+    setSuccessMsg(null);
 
     const driverTrimmed = (driver || '').trim();
     const vehicleTrimmed = (vehicle || '').trim();
@@ -511,21 +548,25 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     if (!driverTrimmed) {
       alert('Debe ingresar el chofer.');
       setSaving(false);
+      submitLockRef.current = false;
       return;
     }
     if (!vehicleTrimmed) {
       alert('Debe seleccionar un vehículo.');
       setSaving(false);
+      submitLockRef.current = false;
       return;
     }
     if (!/^\d+$/.test(kmTrimmed)) {
       alert('Km de la unidad es obligatorio y debe ser un número entero.');
       setSaving(false);
+      submitLockRef.current = false;
       return;
     }
     if (!/^\d+$/.test(hsTrimmed)) {
       alert('Hs. de la unidad es obligatorio y debe ser un número entero.');
       setSaving(false);
+      submitLockRef.current = false;
       return;
     }
 
@@ -534,16 +575,19 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
       if (!vehicleRules?.allowArrastre) {
         alert('Este vehículo no está marcado como "arrastra". No puede asignarse un arrastrado.');
         setSaving(false);
+        submitLockRef.current = false;
         return;
       }
       if (selectedTrailer?.id && selectedVehicle?.id && selectedTrailer.id === selectedVehicle.id) {
         alert('El equipo arrastrado no puede ser el mismo vehículo.');
         setSaving(false);
+        submitLockRef.current = false;
         return;
       }
       if ((selectedTrailer?.drag || '').toLowerCase() !== 'arrastrable') {
         alert('Solo podés seleccionar equipos con drag="arrastrable".');
         setSaving(false);
+        submitLockRef.current = false;
         return;
       }
     }
@@ -633,10 +677,14 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
     if (error) {
       console.error('Error guardando cambio de turno', error);
       alert('No se pudo guardar el cambio de turno. Revisa permisos/RLS en "cambios_turno".');
+      submitLockRef.current = false;
       return;
     }
 
-    onBack();
+    submitLockRef.current = false;
+    setSuccessMsg('Cambio de turno cargado exitosamente.');
+    resetFormState();
+    setShowSuccessModal(true);
   };
 
   return (
@@ -649,6 +697,11 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
         {errorVehiculos && (
           <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
             {errorVehiculos}
+          </div>
+        )}
+        {successMsg && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
+            {successMsg}
           </div>
         )}
 
@@ -897,6 +950,30 @@ const ShiftChangeForm: React.FC<ShiftChangeFormProps> = ({ onBack, userName }) =
           Cancelar
         </button>
       </div>
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-emerald-200 bg-white shadow-xl">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-bold text-emerald-700">Cambio de turno cargado</h3>
+            </div>
+            <div className="px-5 py-4 text-sm text-slate-700">
+              {successMsg || 'El cambio de turno se guardo correctamente.'}
+            </div>
+            <div className="px-5 py-4 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  onBack();
+                }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
